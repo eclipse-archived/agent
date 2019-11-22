@@ -8,7 +8,7 @@ install: bash -ex .agent-ci.sh
 env:
     global:
     - DEPOPTS="atdgen ocp-ocamlres conf-libev"
-    - PINS="fos-agent:. apero-core:git@github.com:atolab/apero.git@c36dee5 apero-net:git@github.com:atolab/apero.git@824c954 apero-time:git@github.com:atolab/apero-time.git@b0446b7 zenoh:git@github.com:atolab/zenoh.git@46d4378 yaks-common:git@github.com:atolab/zenoh.git@5d2e70d yaks-ocaml:git@:github.com/atolab/zenoh.git@d076645 fos-sdk:https://github.com/eclipse-fog05/sdk-ocaml fos-fim-api:https://github.com/eclipse-fog05/api-ocaml"
+    - PINS="fos-agent:. apero-core:git@github.com:atolab/apero.git#c36dee5 apero-net:git@github.com:atolab/apero.git#824c954 apero-time:git@github.com:atolab/apero-time.git#b0446b7 zenoh:git@github.com:atolab/zenoh.git#46d4378 yaks-common:git@github.com:atolab/zenoh.git#5d2e70d yaks-ocaml:git@:github.com/atolab/zenoh.git#d076645 fos-sdk:git@github.com:eclipse-fog05/sdk-ocaml fos-fim-api:git@github.com:eclipse-fog05/api-ocaml"
     - PACKAGE=fos-agent
     matrix:
     - OCAML_VERSION=4.07
