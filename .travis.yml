@@ -1,6 +1,7 @@
 language: c
 sudo: required
 before_install:
+ - sudo apt update -qq
  - sudo apt install libev-dev libssl-dev m4 pkg-config rsync unzip -y
  - wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-opam.sh
 install: bash -ex .agent-ci.sh
