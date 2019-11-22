@@ -1,10 +1,9 @@
 language: c
 sudo: required
-install:
- - sudo apt update -qq
+before_install:
  - sudo apt install libev-dev libssl-dev m4 pkg-config rsync unzip -y
  - wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-opam.sh
-script: bash -ex .yaks-ci.sh
+install: bash -ex .agent-ci.sh
 env:
     global:
     - DEPOPTS="atdgen ocp-ocamlres conf-libev"
