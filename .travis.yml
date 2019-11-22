@@ -2,13 +2,13 @@ language: c
 sudo: required
 install:
  - sudo apt update -qq
- - sudo apt install libev-dev libssl-dev m4 pkg-config rsync unzip bubblewrap -y
+ - sudo apt install libev-dev libssl-dev m4 pkg-config rsync unzip -y
  - wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-opam.sh
 script: bash -ex .yaks-ci.sh
 env:
     global:
     - DEPOPTS="atdgen ocp-ocamlres conf-libev"
-    - PINS="fos-agent:. apero-core:https://github.com/atolab/apero.git@c36dee5 apero-net:https://github.com/atolab/apero.git@824c954 apero-time:https://github.com/atolab/apero-time.git@b0446b7 zenoh:https://github.com/atolab/zenoh.git@46d4378 yaks-common:https://github.com/atolab/zenoh.git@5d2e70d yaks-ocaml:https://github.com/atolab/zenoh.git@d076645"
+    - PINS="fos-agent:. apero-core:https://github.com/atolab/apero.git@c36dee5 apero-net:https://github.com/atolab/apero.git@824c954 apero-time:https://github.com/atolab/apero-time.git@b0446b7 zenoh:https://github.com/atolab/zenoh.git@46d4378 yaks-common:https://github.com/atolab/zenoh.git@5d2e70d yaks-ocaml:https://github.com/atolab/zenoh.git@d076645 fos-sdk:https://github.com/eclipse-fog05/sdk-ocaml fos-fim-api:https://github.com/eclipse-fog05/api-ocaml"
     - PACKAGE=fos-agent
     matrix:
     - OCAML_VERSION=4.07.1
