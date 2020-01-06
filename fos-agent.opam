@@ -5,7 +5,7 @@ license: "ELP 2"
 authors:      "Gabriele Baldoni"
 homepage:     "https://fog05.io"
 bug-reports:  "https://github.com/eclipse-fog05/agent/issues/"
-dev-repo:     "https://github.com/eclipse-fog05/agent.git"
+dev-repo:     "git+https://github.com/eclipse-fog05/agent.git"
 
 build: [
  ["dune" "subst"] {pinned}
@@ -29,9 +29,8 @@ depends: [
   "apero-core"
   "apero-net"
   "yaks-ocaml"
-  "fos-core"
+  "fos-sdk"
   "fos-fim-api"
-  "fos-faem-api"
 ]
 
 
