@@ -6,6 +6,8 @@ all:
 clean:
 	dune clean
 
+test:
+	echo "Nothing to do"
 
 install:
 	sudo cp _build/default/fos-agent/fos_agent.exe /etc/fos/agent
