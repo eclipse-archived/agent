@@ -2,9 +2,20 @@ FOS_CONF_FILE = /etc/fos/agent.json
 
 
 all:
+
+ifeq "$(INTRAVIS)" "true"
+	echo "Nothing to do"
+else
 	dune build
+endif
+
 clean:
+
+ifeq "$(INTRAVIS)" "true"
+	echo "Nothing to do"
+else
 	dune clean
+endif
 
 test:
 	echo "Nothing to do"

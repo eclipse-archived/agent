@@ -7,6 +7,7 @@ before_install:
 install: bash -ex .travis-opam.sh
 env:
     global:
+    - INTRAVIS="true"
 #    - DEPOPTS="atdgen ocp-ocamlres conf-libev"
     - PINS="fos-agent:. apero-core:https://github.com/atolab/apero-core.git#0.4.5 dynload-sys:https://github.com/atolab/apero-core.git#0.4.5 apero-net:https://github.com/atolab/apero-net.git#0.4.5 apero-time:https://github.com/atolab/apero-time.git#0.4.5 zenoh-proto:https://github.com/atolab/zenoh.git#0.3.0 zenoh-ocaml:https://github.com/atolab/zenoh.git#0.3.0 yaks-common:https://github.com/atolab/yaks-common.git#0.3.0 yaks-ocaml:https://github.com/atolab/yaks-ocaml.git#0.3.0 fos-sdk:https://github.com/eclipse-fog05/sdk-ocaml.git fos-fim-api:https://github.com/eclipse-fog05/api-ocaml.git"
     - PACKAGE=fos-agent
