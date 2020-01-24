@@ -18,19 +18,20 @@ install: [
 ]
 
 depends: [
-  "dune"
-  "cmdliner"
-  "re"
-  "yojson"
-  "logs"
-  "atdgen"
-  "lwt"
-  "lwt_ppx"
-  "apero-core"
-  "apero-net"
-  "yaks-ocaml"
-  "fos-sdk"
-  "fos-fim-api"
+   "dune" {= "1.11.4"}
+  "cmdliner" {= "1.0.4"}
+  "re" {= "1.9.0"}
+  "yojson" {= "1.7.0"}
+  "logs" {= "0.7.0"}
+  "lwt" {= "5.1.1"}
+  "lwt_ppx" {= "1.2.3"}
+  "logs-syslog" {= "0.2.1"}
+  "apero-core" {= "0.4.5"}
+  "apero-net" {= "0.4.5"}
+  "yaks-common" {= "0.3.0"}
+  "yaks-ocaml" {= "0.3.0"}
+  "fos-sdk" {= "0.1"}
+  "fos-fim-api"  {= "0.1"}
 ]
 
 
