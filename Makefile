@@ -21,9 +21,9 @@ test:
 	echo "Nothing to do"
 
 install:
-	sudo cp _build/default/fos-agent/fos_agent.exe /etc/fos/agent
-	sudo cp etc/fos_agent.service /lib/systemd/system/
-	sudo cp etc/fos_agent.target /lib/systemd/system/
+	install -m 0755 _build/default/fos-agent/fos_agent.exe /etc/fos/agent
+	install etc/fos_agent.service /lib/systemd/system/
+	install etc/fos_agent.target /lib/systemd/system/
 ifeq "$(wildcard $(FOS_CONF_FILE))" ""
-	sudo cp etc/agent.json /etc/fos/agent.json
+	install etc/agent.json /etc/fos/agent.json
 endif
