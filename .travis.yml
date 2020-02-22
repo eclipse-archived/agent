@@ -31,7 +31,6 @@ before_install:
   - docker exec build opam init --disable-sandboxing
   # copying repo inside container
   - docker cp ../agent build:/root/
-script:
   - docker exec build bash -c "eval \$(opam env) && opam install dune.1.11.4 atdgen.2.0.0 conf-libev ocp-ocamlres -y"
   - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/atolab/apero-core.git -b 0.4.6 --depth 1 && cd apero-core && opam install . --working-dir -y"
   - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/atolab/apero-net.git -b 0.4.6 --depth 1 && cd apero-net && opam install . --working-dir -y"
@@ -41,6 +40,7 @@ script:
   - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/atolab/yaks-ocaml.git -b 0.3.0 --depth 1 && cd yaks-ocaml && opam install . --working-dir -y"
   - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/eclipse-fog05/sdk-ocaml.git && cd sdk-ocaml && make install"
   - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/eclipse-fog05/api-ocaml.git && cd api-ocaml && make install"
+script:
   - docker exec build bash -c "eval \$(opam env) && cd /root/agent && make"
     # building a debian package
   - docker exec build bash -c "eval \$(opam env) && mkdir /root/build && cd /root && cp -r agent build/fog05-0.1 && cd build/fog05-0.1 && rm -rf .git && make clean && cd .. && tar -czvf fog05-0.1.tar.gz fog05-0.1"
