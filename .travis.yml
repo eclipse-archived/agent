@@ -32,14 +32,16 @@ before_install:
   # copying repo inside container
   - docker cp ../agent build:/root/
   - docker exec build bash -c "eval \$(opam env) && opam install dune.1.11.4 atdgen.2.0.0 conf-libev ocp-ocamlres -y"
-  - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/atolab/apero-core.git -b 0.4.6 --depth 1 && cd apero-core && opam install . --working-dir -y"
-  - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/atolab/apero-net.git -b 0.4.6 --depth 1 && cd apero-net && opam install . --working-dir -y"
-  - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/atolab/apero-time.git -b 0.4.6 --depth 1 && cd apero-time && opam install . --working-dir -y"
-  - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/atolab/zenoh.git -b 0.3.0 --depth 1 && cd zenoh && opam install . --working-dir -y"
-  - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/atolab/yaks-common.git -b 0.3.0 --depth 1 && cd yaks-common && opam install . --working-dir -y"
-  - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/atolab/yaks-ocaml.git -b 0.3.0 --depth 1 && cd yaks-ocaml && opam install . --working-dir -y"
-  - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/eclipse-fog05/sdk-ocaml.git && cd sdk-ocaml && make install"
-  - docker exec build bash -c "eval \$(opam env) && cd /root/ && git clone https://github.com/eclipse-fog05/api-ocaml.git && cd api-ocaml && make install"
+  - docker exec build bash -c "eval \$(opam env) && opam pin add apero-core https://github.com/atolab/apero-core.git#0.4.6 -y"
+  - docker exec build bash -c "eval \$(opam env) && opam pin add dynload-sys https://github.com/atolab/apero-core.git#0.4.6 -y"
+  - docker exec build bash -c "eval \$(opam env) && opam pin add apero-net https://github.com/atolab/apero-net.git#0.4.6 -y"
+  - docker exec build bash -c "eval \$(opam env) && opam pin add apero-time https://github.com/atolab/apero-time.git#0.4.6 -y"
+  - docker exec build bash -c "eval \$(opam env) && opam pin add zenoh-proto https://github.com/atolab/zenoh.git#0.3.0 -y"
+  - docker exec build bash -c "eval \$(opam env) && opam pin add zenoh-ocaml https://github.com/atolab/zenoh.git#0.3.0 -y"
+  - docker exec build bash -c "eval \$(opam env) && opam pin add yaks-common https://github.com/atolab/yaks-common.git#0.3.0 -y"
+  - docker exec build bash -c "eval \$(opam env) && opam pin add yaks-ocaml https://github.com/atolab/yaks-ocaml.git#0.3.0 -y"
+  - docker exec build bash -c "eval \$(opam env) && opam pin add fos-sdk https://github.com/eclipse-fog05/sdk-ocaml.git -y"
+  - docker exec build bash -c "eval \$(opam env) && opam pin add fos-fim-api https://github.com/eclipse-fog05/api-ocaml.git  -y"
 script:
   - docker exec build bash -c "eval \$(opam env) && cd /root/agent && make"
     # building a debian package
