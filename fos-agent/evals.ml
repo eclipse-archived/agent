@@ -9,7 +9,7 @@ open Utils
     MVar.read self >>= fun state ->
     let fdu_uuid = Apero.Option.get @@ Apero.Properties.get "fdu_uuid" props in
     try%lwt
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_fdu_info  Yaks_connector.default_system_id Yaks_connector.default_tenant_id fdu_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_fdu_info  (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id fdu_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let js = FAgentTypes.json_of_string @@ User.Descriptors.FDU.string_of_descriptor descriptor in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
@@ -23,7 +23,7 @@ open Utils
     MVar.read self >>= fun state ->
     let image_uuid = Apero.Option.get @@ Apero.Properties.get "image_uuid" props in
     try%lwt
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_image Yaks_connector.default_system_id Yaks_connector.default_tenant_id image_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_image (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id image_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let js = FAgentTypes.json_of_string @@ User.Descriptors.FDU.string_of_image descriptor in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
@@ -40,7 +40,7 @@ open Utils
     let instanceid = Apero.Option.get @@ Apero.Properties.get "instance_uuid" props in
     try%lwt
       let _ = Logs.debug (fun m -> m "[FOS-AGENT] - eval_get_node_fdu_info - Search for FDU Info") in
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_node_fdu_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id node_uuid fdu_uuid instanceid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_node_fdu_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id node_uuid fdu_uuid instanceid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let js = FAgentTypes.json_of_string @@ Infra.Descriptors.FDU.string_of_record  descriptor in
       let _ = Logs.debug (fun m -> m "[FOS-AGENT] - eval_get_node_fdu_info - INFO %s" (FAgentTypes.string_of_json js)) in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
@@ -55,7 +55,7 @@ open Utils
     MVar.read self >>= fun state ->
     let net_uuid = Apero.Option.get @@ Apero.Properties.get "uuid" props in
     try%lwt
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_network Yaks_connector.default_system_id Yaks_connector.default_tenant_id net_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_network (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id net_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let js = FAgentTypes.json_of_string @@ FTypes.string_of_virtual_network descriptor in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
@@ -70,16 +70,16 @@ open Utils
     let cp_uuid = Apero.Option.get @@ Apero.Properties.get "cp_uuid" props in
     let _ = Logs.debug (fun m -> m "[FOS-AGENT] - eval_get_port_info - Getting info for port %s" cp_uuid ) in
     try%lwt
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_port Yaks_connector.default_system_id Yaks_connector.default_tenant_id cp_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_port (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id cp_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let js = FAgentTypes.json_of_string @@ User.Descriptors.Network.string_of_connection_point_descriptor  descriptor in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
     with
     | _ ->
       let _ = Logs.debug (fun m -> m "[FOS-AGENT] - eval_get_port_info - Search port on FDU") in
-      let%lwt fdu_ids = Yaks_connector.Global.Actual.get_catalog_all_fdus Yaks_connector.default_system_id Yaks_connector.default_tenant_id state.yaks in
+      let%lwt fdu_ids = Yaks_connector.Global.Actual.get_catalog_all_fdus (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id state.yaks in
       let%lwt cps = Lwt_list.filter_map_p (fun e ->
-          let%lwt fdu =  Yaks_connector.Global.Actual.get_catalog_fdu_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id e state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+          let%lwt fdu =  Yaks_connector.Global.Actual.get_catalog_fdu_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id e state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
           let%lwt c = Lwt_list.filter_map_p (fun (cp:User.Descriptors.Network.connection_point_descriptor) ->
               let _ = Logs.debug (fun m -> m "[FOS-AGENT] - eval_get_port_info - %s == %s ? %d " cp.id cp_uuid (String.compare cp.id  cp_uuid)) in
               if (String.compare cp.id cp_uuid) == 0 then  Lwt.return @@ Some cp
@@ -103,8 +103,8 @@ open Utils
     MVar.read self >>= fun state ->
     let node_uuid = Apero.Option.get @@ Apero.Properties.get "node_uuid" props in
     try%lwt
-      let%lwt nconf = Yaks_connector.Global.Actual.get_node_configuration Yaks_connector.default_system_id Yaks_connector.default_tenant_id node_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_node_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id node_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt nconf = Yaks_connector.Global.Actual.get_node_configuration (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id node_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_node_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id node_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let nws = descriptor.network in
       let%lwt addr = (Lwt_list.filter_map_p (
           fun (e:FTypes.network_spec_type) ->
@@ -153,7 +153,7 @@ open Utils
       let%lwt record =  Yaks_connector.Local.Actual.get_node_network  (Apero.Option.get state.configuration.agent.uuid) net_p net_id state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let record = {record with status = `DESTROY} in
       let%lwt _ = Yaks_connector.Local.Desired.add_node_network (Apero.Option.get state.configuration.agent.uuid) net_p net_id record state.yaks in
-      Yaks_connector.Global.Actual.remove_network Yaks_connector.default_system_id Yaks_connector.default_tenant_id record.uuid state.yaks >>= Lwt.return
+      Yaks_connector.Global.Actual.remove_network (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id record.uuid state.yaks >>= Lwt.return
       >>= fun _ ->
       let js = JSON.of_string @@ FTypesRecord.string_of_virtual_network record in
       let eval_res = FAgentTypes.{result = Some js ; error=None; error_msg = None} in
@@ -216,14 +216,14 @@ open Utils
     try%lwt
 
 
-      (* let%lwt nodeid = Yaks_connector.Global.Actual.get_fdu_instance_node Yaks_connector.default_system_id Yaks_connector.default_tenant_id instance_id state.yaks in
+      (* let%lwt nodeid = Yaks_connector.Global.Actual.get_fdu_instance_node (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id instance_id state.yaks in
          let nodeid =
          match nodeid with
          | Some nid -> nid
          | None ->  raise @@ FException (`InternalError (`Msg ("Unable to find nodeid for this instance id" ) ))
          in *)
 
-      let%lwt record = Yaks_connector.Global.Actual.get_node_fdu_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) "*" instance_id state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt record = Yaks_connector.Global.Actual.get_node_fdu_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) "*" instance_id state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let _ = Logs.debug (fun m -> m "[FOS-AGENT] - EV-CONNECT-CP-TO-FDU - FDU Record: %s" (Infra.Descriptors.FDU.string_of_record record) ) in
       (* Find Correct Plugin *)
       let fdu_type = Fos_sdk.string_of_hv_type record.hypervisor in
@@ -277,7 +277,7 @@ open Utils
     try%lwt
 
 
-      let%lwt record = Yaks_connector.Global.Actual.get_node_fdu_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) "*" instance_id state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt record = Yaks_connector.Global.Actual.get_node_fdu_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) "*" instance_id state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       (* Find Correct Plugin *)
       let fdu_type = Fos_sdk.string_of_hv_type record.hypervisor in
       let%lwt plugins = Yaks_connector.Local.Actual.get_node_plugins (Apero.Option.get state.configuration.agent.uuid) state.yaks in
@@ -375,7 +375,7 @@ open Utils
           let fduid = Apero.Uuid.to_string @@ Apero.Uuid.make_from_alias descriptor.id in
           {descriptor with uuid = Some fduid}
       in
-      Yaks_connector.Global.Actual.add_catalog_fdu_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id (Apero.Option.get descriptor.uuid) descriptor state.yaks
+      Yaks_connector.Global.Actual.add_catalog_fdu_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get descriptor.uuid) descriptor state.yaks
       >>= fun _ ->
       let js = JSON.of_string (User.Descriptors.FDU.string_of_descriptor descriptor) in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
@@ -393,7 +393,7 @@ open Utils
     MVar.read self >>= fun state ->
     let fdu_uuid = Apero.Option.get @@ Apero.Properties.get "fdu_id" props in
     try%lwt
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_fdu_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id fdu_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_fdu_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id fdu_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       (* Find Correct Plugin *)
       let fdu_type = Fos_sdk.string_of_hv_type descriptor.hypervisor in
       let%lwt plugins = Yaks_connector.Local.Actual.get_node_plugins (Apero.Option.get state.configuration.agent.uuid) state.yaks in
@@ -532,7 +532,7 @@ open Utils
     let descriptor = Apero.Option.get @@ Apero.Properties.get "descriptor" props in
     try%lwt
       let descriptor = User.Descriptors.FDU.descriptor_of_string descriptor in
-      let%lwt node_info = Yaks_connector.Global.Actual.get_node_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt node_info = Yaks_connector.Global.Actual.get_node_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let comp_requirements = descriptor.computation_requirements in
       let compare (fdu_cp:User.Descriptors.FDU.computational_requirements)  (ninfo:FTypes.node_info) =
         let ncpu = List.hd ninfo.cpu in
@@ -588,9 +588,9 @@ open Utils
           {descriptor with uuid = Some fduid}
       in
       (* Here have to verify that the Atomic Entities composing the entity are already present in the catalog if query where available this will result in a selector with a query, that is faster*)
-      let%lwt aes = Yaks_connector.Global.Actual.get_catalog_all_atomic_entities Yaks_connector.default_system_id Yaks_connector.default_tenant_id state.yaks  >>=
+      let%lwt aes = Yaks_connector.Global.Actual.get_catalog_all_atomic_entities (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id state.yaks  >>=
         Lwt_list.map_p (fun (e:string) ->
-            let%lwt e = Yaks_connector.Global.Actual.get_catalog_atomic_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id e state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+            let%lwt e = Yaks_connector.Global.Actual.get_catalog_atomic_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id e state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
             Lwt.return e.id
           )
       in
@@ -602,7 +602,7 @@ open Utils
         ) descriptor.atomic_entities
       in
       (*  *)
-      Yaks_connector.Global.Actual.add_catalog_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id (Apero.Option.get descriptor.uuid) descriptor state.yaks
+      Yaks_connector.Global.Actual.add_catalog_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get descriptor.uuid) descriptor state.yaks
       >>= fun _ ->
       let js = JSON.of_string (User.Descriptors.Entity.string_of_descriptor descriptor) in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
@@ -621,10 +621,10 @@ open Utils
     let ae_id = Apero.Option.get @@ Apero.Properties.get "entity_id" props in
     try%lwt
 
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id ae_id state.yaks in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id ae_id state.yaks in
       match descriptor with
       | Some d ->
-        Yaks_connector.Global.Actual.remove_catalog_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id d.id state.yaks
+        Yaks_connector.Global.Actual.remove_catalog_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id d.id state.yaks
         >>= fun _ ->
         let js = JSON.of_string (User.Descriptors.Entity.string_of_descriptor d) in
         let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
@@ -659,7 +659,7 @@ open Utils
         ) descriptor.connection_points
       in
       let descriptor = {descriptor with connection_points = cps} in
-      Yaks_connector.Global.Actual.add_catalog_atomic_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id (Apero.Option.get descriptor.uuid) descriptor state.yaks
+      Yaks_connector.Global.Actual.add_catalog_atomic_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get descriptor.uuid) descriptor state.yaks
       >>= fun _ ->
       let js = JSON.of_string (User.Descriptors.AtomicEntity.string_of_descriptor descriptor) in
       let eval_res = FAgentTypes.{result = Some js ; error=None; error_msg = None} in
@@ -678,10 +678,10 @@ open Utils
     let ae_id = Apero.Option.get @@ Apero.Properties.get "ae_id" props in
     try%lwt
 
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_atomic_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id ae_id state.yaks in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_atomic_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id ae_id state.yaks in
       match descriptor with
       | Some d ->
-        Yaks_connector.Global.Actual.remove_catalog_atomic_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id d.id state.yaks
+        Yaks_connector.Global.Actual.remove_catalog_atomic_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id d.id state.yaks
         >>= fun _ ->
         let js = JSON.of_string (User.Descriptors.AtomicEntity.string_of_descriptor d) in
         let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
@@ -701,7 +701,7 @@ open Utils
     MVar.read self >>= fun state ->
     let e_uuid = Apero.Option.get @@ Apero.Properties.get "entity_id" props in
     try%lwt
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id e_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id e_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       (* Check function *)
       let instance_id = Apero.Uuid.to_string @@ Apero.Uuid.make () in
       (* Add UUID to VLs *)
@@ -775,9 +775,9 @@ open Utils
         ) nets
       in
       ignore netdescs;
-      let%lwt aes = Yaks_connector.Global.Actual.get_catalog_all_atomic_entities Yaks_connector.default_system_id Yaks_connector.default_tenant_id state.yaks  >>=
+      let%lwt aes = Yaks_connector.Global.Actual.get_catalog_all_atomic_entities (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id state.yaks  >>=
         Lwt_list.map_p (fun (e:string) ->
-            let%lwt e = Yaks_connector.Global.Actual.get_catalog_atomic_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id e state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+            let%lwt e = Yaks_connector.Global.Actual.get_catalog_atomic_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id e state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
             Lwt.return (e.id, Apero.Option.get e.uuid)
           )
       in
@@ -785,7 +785,7 @@ open Utils
       let%lwt ae_instances = Lwt_list.map_p (fun (e:User.Descriptors.Entity.constituent_atomic_entity) ->
           match List.find_opt (fun (x,_) -> (String.compare x e.id)==0) aes with
           | Some (_,ae_uuid) ->
-            let%lwt desc = Yaks_connector.Global.Actual.get_catalog_atomic_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id ae_uuid state.yaks in
+            let%lwt desc = Yaks_connector.Global.Actual.get_catalog_atomic_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id ae_uuid state.yaks in
             (match desc with
              | Some _ ->
                let%lwt ae_rec = Fos_faem_api.AtomicEntity.instantiate ae_uuid state.faem_api in
@@ -849,7 +849,7 @@ open Utils
         }
       in
       let js = JSON.of_string (Infra.Descriptors.Entity.string_of_record record) in
-      let%lwt _ = Yaks_connector.Global.Actual.add_records_entity_instance_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id e_uuid instance_id record state.yaks in
+      let%lwt _ = Yaks_connector.Global.Actual.add_records_entity_instance_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id e_uuid instance_id record state.yaks in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
 
@@ -867,7 +867,7 @@ open Utils
     (* let ae_id = Apero.Option.get @@ Apero.Properties.get "ae_id" props in *)
     let e_instance_id = Apero.Option.get @@ Apero.Properties.get "instance_id" props in
     try%lwt
-      let%lwt record = Yaks_connector.Global.Actual.get_records_entity_instance_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id "*" e_instance_id state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt record = Yaks_connector.Global.Actual.get_records_entity_instance_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id "*" e_instance_id state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let%lwt _ = Lwt_list.iter_p (fun (ae:Infra.Descriptors.Entity.constituent_atomic_entity) ->
           Fos_faem_api.AtomicEntity.terminate ae.uuid state.faem_api
           >>= fun _ -> Lwt.return_unit
@@ -879,7 +879,7 @@ open Utils
         ) record.virtual_links
       in
       let js = JSON.of_string (Infra.Descriptors.Entity.string_of_record record) in
-      let%lwt _ = Yaks_connector.Global.Actual.remove_records_atomic_entity_instance_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id record.entity_id e_instance_id state.yaks in
+      let%lwt _ = Yaks_connector.Global.Actual.remove_records_atomic_entity_instance_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id record.entity_id e_instance_id state.yaks in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
 
@@ -896,7 +896,7 @@ open Utils
     MVar.read self >>= fun state ->
     let ae_uuid = Apero.Option.get @@ Apero.Properties.get "ae_id" props in
     try%lwt
-      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_atomic_entity_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id ae_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt descriptor = Yaks_connector.Global.Actual.get_catalog_atomic_entity_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id ae_uuid state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       (* Check function *)
       let check_fdu_nodes_compatibility sysid tenantid fdu_info =
         let parameters = [("descriptor",User.Descriptors.FDU.string_of_descriptor fdu_info)] in
@@ -965,7 +965,7 @@ open Utils
       let descriptor = {descriptor with fdus = fdus} in
       (* Get compatible nodes for each FDU *)
       let%lwt fdus_node_maps = Lwt_list.map_p (fun (fdu:User.Descriptors.FDU.descriptor) ->
-          let%lwt res = check_fdu_nodes_compatibility Yaks_connector.default_system_id Yaks_connector.default_tenant_id fdu in
+          let%lwt res = check_fdu_nodes_compatibility (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id fdu in
           match res with
           | [] -> Lwt.fail @@ FException (`NoCompatibleNodes (`MsgCode (( Printf.sprintf ("No Node found compatible with this FDU %s") fdu.id ),503) ))
           | lst ->
@@ -1102,7 +1102,7 @@ open Utils
         }
       in
       let js = JSON.of_string (Infra.Descriptors.AtomicEntity.string_of_record ae_record) in
-      let%lwt _ = Yaks_connector.Global.Actual.add_records_atomic_entity_instance_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id ae_uuid instanceid ae_record state.yaks in
+      let%lwt _ = Yaks_connector.Global.Actual.add_records_atomic_entity_instance_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id ae_uuid instanceid ae_record state.yaks in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
 
@@ -1120,7 +1120,7 @@ open Utils
     (* let ae_id = Apero.Option.get @@ Apero.Properties.get "ae_id" props in *)
     let ae_instance_id = Apero.Option.get @@ Apero.Properties.get "instance_id" props in
     try%lwt
-      let%lwt record = Yaks_connector.Global.Actual.get_records_atomic_entity_instance_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id "*" ae_instance_id state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+      let%lwt record = Yaks_connector.Global.Actual.get_records_atomic_entity_instance_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id "*" ae_instance_id state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
       let%lwt _ = Lwt_list.iter_p (fun (fdur:Infra.Descriptors.FDU.record) ->
           Fos_fim_api.FDU.terminate fdur.uuid state.fim_api
           >>= fun _ -> Fos_fim_api.FDU.offload fdur.fdu_id state.fim_api
@@ -1143,7 +1143,7 @@ open Utils
         ) record.connection_points
       in
       let js = JSON.of_string (Infra.Descriptors.AtomicEntity.string_of_record record) in
-      let%lwt _ = Yaks_connector.Global.Actual.remove_records_atomic_entity_instance_info Yaks_connector.default_system_id Yaks_connector.default_tenant_id record.atomic_entity_id ae_instance_id state.yaks in
+      let%lwt _ = Yaks_connector.Global.Actual.remove_records_atomic_entity_instance_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id record.atomic_entity_id ae_instance_id state.yaks in
       let eval_res = FAgentTypes.{result = Some js ; error = None; error_msg = None} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
 
@@ -1171,7 +1171,7 @@ open Utils
         (* Convertion from record *)
         let floating_r = FTypes.floating_ip_record_of_string @@ JSON.to_string (Apero.Option.get r.result) in
         let floating = FTypes.{uuid = floating_r.uuid; ip_version = floating_r.ip_version; address = floating_r.address} in
-        Yaks_connector.Global.Actual.add_node_floating_ip Yaks_connector.default_system_id Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) floating.uuid floating state.yaks
+        Yaks_connector.Global.Actual.add_node_floating_ip (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) floating.uuid floating state.yaks
         >>= fun _ ->
         let eval_res = FAgentTypes.{result = Some (JSON.of_string (FTypes.string_of_floating_ip floating)) ; error = None; error_msg = None} in
         Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
@@ -1200,7 +1200,7 @@ open Utils
         (* Convertion from record *)
         let floating_r = FTypes.floating_ip_record_of_string @@ JSON.to_string (Apero.Option.get r.result) in
         let floating = FTypes.{uuid = floating_r.uuid; ip_version = floating_r.ip_version; address = floating_r.address} in
-        Yaks_connector.Global.Actual.add_node_floating_ip Yaks_connector.default_system_id Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) floating.uuid floating state.yaks
+        Yaks_connector.Global.Actual.add_node_floating_ip (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) floating.uuid floating state.yaks
         >>= fun _ ->
         let eval_res = FAgentTypes.{result = Some (JSON.of_string (FTypes.string_of_floating_ip floating)) ; error = None; error_msg =  None} in
         Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
@@ -1232,7 +1232,7 @@ open Utils
         (* Convertion from record *)
         let floating_r = FTypes.floating_ip_record_of_string @@ JSON.to_string (Apero.Option.get r.result) in
         let floating = FTypes.{uuid = floating_r.uuid; ip_version = floating_r.ip_version; address = floating_r.address} in
-        Yaks_connector.Global.Actual.add_node_floating_ip Yaks_connector.default_system_id Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) floating.uuid floating state.yaks
+        Yaks_connector.Global.Actual.add_node_floating_ip (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) floating.uuid floating state.yaks
         >>= fun _ ->
         let eval_res = FAgentTypes.{result = Some (JSON.of_string (FTypes.string_of_floating_ip floating)) ; error=None; error_msg = None} in
         Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
@@ -1260,7 +1260,7 @@ open Utils
         (* Convertion from record *)
         let floating_r = FTypes.floating_ip_record_of_string @@ JSON.to_string (Apero.Option.get r.result) in
         let floating = FTypes.{uuid = floating_r.uuid; ip_version = floating_r.ip_version; address = floating_r.address} in
-        Yaks_connector.Global.Actual.add_node_floating_ip Yaks_connector.default_system_id Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) floating.uuid floating state.yaks
+        Yaks_connector.Global.Actual.add_node_floating_ip (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) floating.uuid floating state.yaks
         >>= fun _ ->
         let eval_res = FAgentTypes.{result = Some (JSON.of_string (FTypes.string_of_floating_ip floating)) ; error = None; error_msg = None} in
         Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
@@ -1306,7 +1306,7 @@ open Utils
         in
         let router_desc = Router.{uuid = Some router.uuid; ports = ports; } in
         (*  *)
-        Yaks_connector.Global.Actual.add_node_router Yaks_connector.default_system_id Yaks_connector.default_tenant_id  (Apero.Option.get state.configuration.agent.uuid) router.uuid router_desc state.yaks
+        Yaks_connector.Global.Actual.add_node_router (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id  (Apero.Option.get state.configuration.agent.uuid) router.uuid router_desc state.yaks
         >>= fun _ ->
         let eval_res = FAgentTypes.{result = Some (JSON.of_string (Router.string_of_record router)) ; error = None; error_msg = None} in
         Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
@@ -1343,7 +1343,7 @@ open Utils
         in
         let router_desc = Router.{uuid = Some router.uuid; ports = ports; } in
         (*  *)
-        Yaks_connector.Global.Actual.add_node_router Yaks_connector.default_system_id Yaks_connector.default_tenant_id  (Apero.Option.get state.configuration.agent.uuid) router.uuid router_desc state.yaks
+        Yaks_connector.Global.Actual.add_node_router (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id  (Apero.Option.get state.configuration.agent.uuid) router.uuid router_desc state.yaks
         >>= fun _ ->
         let eval_res = FAgentTypes.{result = Some (JSON.of_string (Router.string_of_record router)) ; error = None; error_msg = None} in
         Lwt.return @@ FAgentTypes.string_of_eval_result eval_res

@@ -3,6 +3,7 @@ open Lwt.Infix
 
 module MVar = Apero.MVar_lwt
 
+module HeartbeatMap = Map.Make(String)
 
 module HeartbeatMessage = struct
 
@@ -71,7 +72,7 @@ end
 type statistics = {
     peer: string;
     timeout: float;
-    server_sock_addr : Lwt_unix.sockaddr;
+    peer_address : string;
     rbuf : Bytes.t;
     blen : int;
     avg : float;
@@ -79,8 +80,10 @@ type statistics = {
     packet_received: int;
     bytes_sent: int;
     bytes_received: int;
+    run : bool;
 }
 
+type t = statistics MVar.t
 (*
 let self_server_port = 9091
 let self_client_port = 9190
@@ -90,53 +93,57 @@ let addr_cli = Lwt_unix.ADDR_INET ((Unix.inet_addr_of_string  "127.0.0.1"), self
 let yaks_locator = "tcp/127.0.0.1:7447" *)
 
 
-let run_client addr_cli state =
+let run_client addr_cli state address =
+    Logs.debug (fun m -> m "[run_client] - Ping client stating for %s" address);
+
     let sock = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
-    (* let server_sockaddr = addr_svr in *)
+    let server_sock_addr = Lwt_unix.ADDR_INET ((Unix.inet_addr_of_string  address), 9091) in
     let%lwt _ = Lwt_unix.bind sock addr_cli in
+
     let rec loop sock run state =
-        (* let _ = Lwt_io.printf "Run: %d started\n" run in *)
-        (* let _ =  Lwt_io.flush Lwt_io.stdout in *)
-        let%lwt _ =
+        let%lwt result =
             MVar.guarded state @@ fun self ->
+            (* check if need to continue ping *)
+            match self.run with
+            | false -> MVar.return false self
+            | true ->
             (* make msg *)
             let msg = HeartbeatMessage.make_ping (Int32.of_int run) in
             let buf = HeartbeatMessage.to_buf msg in
             let sbuf = Abuf.read_bytes (Abuf.w_pos buf) buf in
 
-        (* send and receive *)
-        let t0 = Unix.gettimeofday () in
-        let%lwt sent = Lwt_unix.sendto sock sbuf 0 (Bytes.length sbuf) [] self.server_sock_addr in
-        (* let _ = Lwt_io.printf "Sent %d bytes\n" n in *)
-        let timeout = Lwt_unix.sleep self.timeout >>= fun _ -> Lwt.return (0,false) in
-        let ok = Lwt_unix.recvfrom sock self.rbuf 0 self.blen [] >>= fun (l,_) -> Lwt.return (l,true) in
-        let%lwt l,res = Lwt.pick [timeout; ok] in
-        let t1 = Unix.gettimeofday () in
-        let t_tot = (t1-.t0) in
-        match res with
-        | true ->
-            (* decoding *)
-            let rabuf = Abuf.from_bytes self.rbuf in
-            let rmsg = HeartbeatMessage.from_buf rabuf in
-            (match rmsg.msg_type with
-            | PONG ->
-                (* print *)
-                (* let _ = Lwt_io.printf "Run: %d -  RTT: %f - Data: %d %d %s\n" run t_tot (HeartbeatMessage.msg_type_to_int rmsg.msg_type) (Int32.to_int rmsg.sequence_number) (Bytes.to_string rmsg.node_id) in *)
-                (* let avg =  (List.fold_left ( +. ) 0.0 self.rtts) /. float(List.length self.rtts) in *)
-                let avg = (self.avg *. float(self.packet_received) +. t_tot) /. float(self.packet_received+1) in
-                let self = {self with timeout = 3.0*.avg; avg = avg; packet_received = self.packet_received + 1; packet_sent = self.packet_sent + 1; bytes_sent = self.bytes_sent + sent; bytes_received = self.bytes_received + l } in
-                MVar.return true self
-            | PING -> failwith "Not expected ping")
+            (* send and receive *)
+            let t0 = Unix.gettimeofday () in
+            let%lwt sent = Lwt_unix.sendto sock sbuf 0 (Bytes.length sbuf) [] server_sock_addr in
+            let timeout = Lwt_unix.sleep self.timeout >>= fun _ -> Lwt.return (0,false) in
+            let ok = Lwt_unix.recvfrom sock self.rbuf 0 self.blen [] >>= fun (l,_) -> Lwt.return (l,true) in
+            let%lwt l,res = Lwt.pick [timeout; ok] in
+            let t1 = Unix.gettimeofday () in
+            let t_tot = (t1-.t0) in
+            (* verify result *)
+            match res with
+            | true ->
+                (* decoding *)
+                let rabuf = Abuf.from_bytes self.rbuf in
+                let rmsg = HeartbeatMessage.from_buf rabuf in
+                (match rmsg.msg_type with
+                | PONG ->
+                    let avg = (self.avg *. float(self.packet_received) +. t_tot) /. float(self.packet_received+1) in
+                    let self = {self with timeout = 3.0*.avg; avg = avg; packet_received = self.packet_received + 1; packet_sent = self.packet_sent + 1; bytes_sent = self.bytes_sent + sent; bytes_received = self.bytes_received + l } in
+                    MVar.return true self
+                | PING ->
+                    (* cannot receive a ping in this loop *)
+                    failwith "Not expected ping")
 
-        | false ->
-            (* let _ = Lwt_io.printf "Run: %d -  Timeout\n" run in *)
-            let self = {self with packet_sent = self.packet_sent + 1; bytes_sent = self.bytes_sent + sent} in
-            MVar.return false self
+            | false ->
+                let self = {self with packet_sent = self.packet_sent + 1; bytes_sent = self.bytes_sent + sent; timeout = 2.0*.self.timeout} in
+                MVar.return true self
         in
-        (* let _ = Lwt_io.printf "Run: %d ended with %b\n" run res in *)
-        (* let _ =  Lwt_io.flush Lwt_io.stdout in *)
-        let%lwt _ = Lwt_unix.sleep 1.0 in
-        loop sock (run+1) state
+        match result with
+        | true ->
+            let%lwt _ = Lwt_unix.sleep 1.0 in
+            loop sock (run+1) state
+        | false -> Lwt.return_unit
     in loop sock 0 state
 
 let run_server addr nodeid =
@@ -146,19 +153,16 @@ let run_server addr nodeid =
     let blen = 1024 in
     let buf = Bytes.create blen  in
     let rec serve_client sock addr =
+        (* receive, make pong with same sequence number and send *)
         let%lwt l, client = Lwt_unix.recvfrom sock buf 0 blen [] in
-        (* let _ = Lwt_io.printf "Received %d bytes %s\n " l  (Bytes.to_string buf) in
-        let%lwt _ =  Lwt_io.flush Lwt_io.stdout in *)
         let rmsg = HeartbeatMessage.from_buf (Abuf.from_bytes buf) in
         let smsg = HeartbeatMessage.make_pong rmsg.sequence_number nodeid in
         let sbuf = HeartbeatMessage.to_buf smsg in
         let sbuf = Abuf.read_bytes (Abuf.w_pos sbuf) sbuf in
         let%lwt n = Lwt_unix.sendto sock sbuf 0 (Bytes.length sbuf)  [] client in
-        (* let _ = Lwt_io.printf "Sent %d bytes\n" n in
-        let%lwt _ =  Lwt_io.flush Lwt_io.stdout in *)
+
+        (* ignore variables to avoid error in build *)
         ignore n; ignore l;
-        (* let%lwt _ = Lwt_main.yield () in
-        let%lwt _ = Lwt_unix.sleep 0.1 in *)
         serve_client sock addr
     in
     serve_client server_sock addr

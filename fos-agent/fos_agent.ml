@@ -100,15 +100,13 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   (* let sys_info = system_info sys_id uuid in *)
   let%lwt yaks = Yaks_connector.get_connector conf in
   let%lwt fim = Fos_fim_api.FIMAPI.connect ~locator:conf.agent.yaks () in
-  (* Starting Ping Server, listening on all interfaces, on port 9091  *)
-  let _ = Heartbeat.run_server (Lwt_unix.ADDR_INET ((Unix.inet_addr_of_string "0.0.0.0"), 9091)) uuid in
   (*
    * Here we should check if state is present in local persistent YAKS and
    * recoved from that
    *)
   let cli_parameters = [configuration] in
   (* let self = {yaks; configuration = conf; cli_parameters; spawner = None; completer = c; constrained_nodes = ConstraintMap.empty; fim_api = fim; faem_api = faem} in *)
-  let self = {yaks; configuration = conf; cli_parameters; spawner = None; completer = c; constrained_nodes = ConstraintMap.empty; fim_api = fim} in
+  let self = {yaks; configuration = conf; cli_parameters; spawner = None; completer = c; constrained_nodes = ConstraintMap.empty; fim_api = fim; ping_tasks = Heartbeat.HeartbeatMap.empty } in
   let state = MVar.create self in
   let%lwt _ = MVar.read state >>= fun state ->
     Yaks_connector.Global.Actual.add_node_configuration sys_id Yaks_connector.default_tenant_id uuid conf state.yaks
@@ -166,6 +164,8 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   let%lwt _ = Yaks_connector.Global.Desired.observe_flavors sys_id Yaks_connector.default_tenant_id (Listeners.cb_gd_flavor state) yaks in
   (* Global Actual with NodeID *)
   let%lwt _ = Yaks_connector.Global.Desired.observe_node_routers sys_id Yaks_connector.default_tenant_id uuid (Listeners.cb_gd_router state) yaks in
+  (* Global Actual *)
+  let%lwt _ = Yaks_connector.Global.Actual.observe_nodes sys_id Yaks_connector.default_tenant_id (Listeners.cb_ga_nodes state) yaks in
   (* Local Actual Listeners *)
   let%lwt _ = Yaks_connector.Local.Actual.observe_node_plugins uuid (Listeners.cb_la_plugin state) yaks in
   let%lwt _ = Yaks_connector.Local.Actual.observe_node_info uuid (Listeners.cb_la_ni state) yaks in
@@ -175,56 +175,32 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   let%lwt _ = Yaks_connector.Local.Actual.observe_node_port uuid (Listeners.cb_la_cp state) yaks in
   let%lwt _ = Yaks_connector.Local.Actual.observe_node_router uuid (Listeners.cb_la_router state) yaks in
   let%lwt _ = Yaks_connector.LocalConstraint.Actual.observe_nodes (Listeners.cb_lac_nodes state) yaks in
-  (* let load_spawner_fun =
-     let spawner_path = "_build/default/src/fos/fos-spawner/spawner.exe" in
-     load_spawner spawner_path state
-     >>= fun (p,c) ->
-     let _ = check_spawner_pid p c state 0 in
-     print_spawner_output p
-     in
-     match (conf.agent.enable_spawner) with
-     | true ->
-     load_spawner_fun
-     | false -> Lwt.return_unit
-     >>= fun _ -> *)
+  (* Starting Ping Server, listening on all interfaces, on port 9091  *)
+  let _ = Heartbeat.run_server (Lwt_unix.ADDR_INET ((Unix.inet_addr_of_string "0.0.0.0"), 9091)) uuid in
+  (* preparing ping informations *)
+  let%lwt _ = Utils.prepare_ping_tasks state in
+  let%lwt _ = MVar.read state >>= fun self ->
+    let port = 9190 in
+    let pings = Heartbeat.HeartbeatMap.bindings self.ping_tasks in
+    Lwt_list.iteri_p (fun i (nid,tasks) ->
+      let ping_task_starter = Utils.start_ping_task (Apero.Option.get self.configuration.agent.uuid) self.yaks nid in
+      let port = port + (i*100) in
+      Lwt_list.iteri_p ( fun j task ->
+      let%lwt ip = MVar.read task >>= fun (t : Heartbeat.statistics) -> Lwt.return t.peer_address in
+      ping_task_starter ip (port+j) task
+      ) tasks
+    ) pings
+  in
   main_loop state prom
 
 (* AGENT CMD  *)
 
-let start verbose_flag daemon_flag debug_flag configuration_path custom_uuid =
-  (* ignore verbose_flag; ignore daemon_flag; ignore configuration_path; *)
-  (* match daemon_flag with
-     | true ->
-     let pid = Unix.fork () in
-     if pid=0 then
-     begin
-     let tmp = Filename.get_temp_dir_name () in
-     let pid_file = Filename.concat tmp "fos_agent.pid" in
-     let agent_out_file = Filename.concat tmp "fos_agent.out" in
-     let agent_err_file = Filename.concat tmp "fos_agent.err" in
-     let mpid = Unix.getpid () in
-     let pid_out = open_out pid_file in
-     ignore @@ Printf.fprintf pid_out "%d" mpid;
-     ignore @@ close_out pid_out;
-     let file_out = open_out agent_out_file in
-     let file_err = open_out agent_err_file in
-     ignore @@ Unix.dup2 (Unix.descr_of_out_channel file_out) Unix.stdout;
-     ignore @@ Unix.dup2 (Unix.descr_of_out_channel file_err) Unix.stderr;
-     Lwt_main.run @@ agent verbose_flag debug_flag configuration_path
-     end
-     else exit 0
-     | false -> Lwt_main.run @@ agent verbose_flag debug_flag configuration_path
-  *)
-  ignore daemon_flag;
+let start verbose_flag debug_flag configuration_path custom_uuid =
   Lwt_main.run @@ agent verbose_flag debug_flag configuration_path custom_uuid
 
 let verbose =
   let doc = "Set verbose output." in
   Cmdliner.Arg.(value & flag & info ["v";"verbose"] ~doc)
-
-let daemon =
-  let doc = "Set daemon" in
-  Cmdliner.Arg.(value & flag & info ["d";"daemon"] ~doc)
 
 let id =
   let doc = "Set custom node ID" in
@@ -239,7 +215,7 @@ let config =
   Cmdliner.Arg.(value & opt string "/etc/fos/agent.json" & info ["c";"conf"] ~doc)
 
 
-let agent_t = Cmdliner.Term.(const start $ verbose $ daemon $ debug $ config $ id)
+let agent_t = Cmdliner.Term.(const start $ verbose $ debug $ config $ id)
 
 let info =
   let doc = "fog05 | The Fog-Computing IaaS" in
