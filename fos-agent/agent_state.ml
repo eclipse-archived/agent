@@ -22,6 +22,7 @@ type agent_state = {
 ; completer : bool Lwt.u
 ; constrained_nodes : string ConstraintMap.t
 ; fim_api : Fos_fim_api.api
+; available_nodes : (string * float) list
 }
 
 type t = agent_state MVar.t

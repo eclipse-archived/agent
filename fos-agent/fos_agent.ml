@@ -29,12 +29,13 @@ let register_handlers completer () =
 
 (* MAIN *)
 
-let main_loop state promise ping_completer =
+let main_loop state promise ping_completer heartbeat_completer =
   Logs.info (fun m -> m "Eclipse fog05 Agent - Up & Running!");
   promise >>= fun run ->
   Logs.debug (fun m -> m "[main_loop] - Completer filled with %b" run);
   Logs.debug (fun m -> m "[main_loop] - Received signal... shutdown agent");
   Lwt.wakeup_later ping_completer false;
+  Lwt.wakeup_later heartbeat_completer false;
   MVar.guarded state @@ fun self ->
   (* Here we should store all information in a persistent YAKS
    * and remove them from the in memory YAKS
@@ -87,7 +88,7 @@ let agent verbose_flag debug_flag configuration custom_uuid =
    * recoved from that
    *)
   let cli_parameters = [configuration] in
-  let self = {yaks; configuration = conf; cli_parameters; completer = c; constrained_nodes = ConstraintMap.empty; fim_api = fim; } in
+  let self = {yaks; configuration = conf; cli_parameters; completer = c; constrained_nodes = ConstraintMap.empty; fim_api = fim; available_nodes = []} in
   let state = MVar.create self in
   let%lwt _ = MVar.read state >>= fun state ->
     Yaks_connector.Global.Actual.add_node_configuration sys_id Yaks_connector.default_tenant_id uuid conf state.yaks
@@ -96,9 +97,12 @@ let agent verbose_flag debug_flag configuration custom_uuid =
     Yaks_connector.Local.Actual.add_node_configuration uuid conf state.yaks
   in
   (* Registering Evals *)
+  (* FDU Evals *)
   let%lwt _ = Yaks_connector.Local.Actual.add_agent_eval uuid "get_fdu_info" (Evals.eval_get_fdu_info state) yaks in
   let%lwt _ = Yaks_connector.Local.Actual.add_agent_eval uuid "get_node_fdu_info" (Evals.eval_get_node_fdu_info state) yaks in
+  (* Node evals *)
   let%lwt _ = Yaks_connector.Local.Actual.add_agent_eval uuid "get_node_mgmt_address" (Evals.eval_get_node_mgmt_address state) yaks in
+  (* Network/Port/Image evals *)
   let%lwt _ = Yaks_connector.Local.Actual.add_agent_eval uuid "get_network_info" (Evals.eval_get_network_info state) yaks in
   let%lwt _ = Yaks_connector.Local.Actual.add_agent_eval uuid "get_port_info" (Evals.eval_get_port_info state) yaks in
   let%lwt _ = Yaks_connector.Local.Actual.add_agent_eval uuid "get_image_info" (Evals.eval_get_image_info state) yaks in
@@ -121,6 +125,8 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "onboard_fdu" (Evals.eval_onboard_fdu state) yaks in
   let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "define_fdu" (Evals.eval_define_fdu state) yaks in
   let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "check_node_compatibilty" (Evals.eval_check_fdu state) yaks in
+  (* Heartbeat eval *)
+  let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "heartbeat" (Evals.eval_heartbeat uuid state) yaks in
   (* Constraint Eval  *)
   let%lwt _ = Yaks_connector.LocalConstraint.Actual.add_agent_eval uuid "get_fdu_info" (Evals.eval_get_fdu_info state) yaks in
   (* Registering listeners *)
@@ -149,7 +155,8 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   (* Starting Ping Server, listening on all interfaces, on port 9091  *)
   let _ = Heartbeat.run_server (Lwt_unix.ADDR_INET ((Unix.inet_addr_of_string "0.0.0.0"), 9091)) uuid in
 
-  let%lwt c = Utils.start_ping_single_threaded uuid yaks in
+  let%lwt c_p = Utils.start_ping_single_threaded uuid yaks in
+  let%lwt c_h = Utils.heartbeat_task state in
 
   (* preparing ping information *)
   (* let%lwt _ = Utils.prepare_ping_tasks state in
@@ -163,7 +170,7 @@ let agent verbose_flag debug_flag configuration custom_uuid =
       ) tasks
     ) pings
   in *)
-  main_loop state prom c
+  main_loop state prom c_p c_h
 
 (* AGENT CMD  *)
 

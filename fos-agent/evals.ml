@@ -777,3 +777,28 @@ open Utils
       Logs.err (fun m -> m "[eval_remove_router_port] Exception: %s" (Printexc.to_string exn));
       let eval_res = FAgentTypes.{result = None ; error = Some 22; error_msg = Some (Printexc.to_string exn)} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
+  (*  *)
+  let eval_heartbeat myuuid self (props:Apero.properties) =
+    ignore props;
+    Logs.debug (fun m -> m "[eval_heartbeat]- ##############");
+    Logs.debug (fun m -> m "[eval_heartbeat] - Properties: %s" (Apero.Properties.to_string props));
+    let  _ = MVar.guarded self (fun state ->
+    let source_id = Apero.Option.get @@ Apero.Properties.get "node_id" props in
+    let timestamp = Unix.gettimeofday () in
+    let current_available = state.available_nodes in
+    let new_available =
+      match List.find_opt (fun (n,_) -> String.compare n source_id == 0 ) current_available with
+      | Some _ ->
+            Logs.debug (fun m -> m "[eval_heartbeat] - Updating heartbeat information for %s" source_id);
+            List.append (List.filter (fun (n,_) -> String.compare n source_id != 0) current_available) [(source_id,timestamp)]
+      | None ->
+        Logs.debug (fun m -> m "[eval_heartbeat] - Adding heartbeat information for %s" source_id);
+        List.append current_available [(source_id,timestamp)]
+    in
+    let state = {state with available_nodes = new_available} in
+    MVar.return () state)
+    in
+    let result = FTypes.{nodeid = myuuid } in
+    let eval_res = FAgentTypes.{result = Some (JSON.of_string (FTypes.string_of_heartbeat_info result)) ; error = None; error_msg = None} in
+    Logs.debug (fun m -> m "[eval_heartbeat] - Returning: %s" (FAgentTypes.string_of_eval_result eval_res));
+    Lwt.return @@  FAgentTypes.string_of_eval_result eval_res

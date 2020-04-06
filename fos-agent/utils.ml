@@ -43,6 +43,11 @@ let get_network_plugin self =
   Lwt.return p
 
 
+let get_nodes myuuid connector =
+  let%lwt nodes = Yaks_connector.Global.Actual.get_all_nodes Yaks_connector.default_system_id Yaks_connector.default_tenant_id connector in
+  (* removing self uuid *)
+  Lwt.return @@ List.filter (fun nid -> (String.compare nid myuuid)!=0 ) nodes
+
 let get_nodes_ips_st myuuid connector =
     (* get all nodes uuid *)
     let%lwt nodes = Yaks_connector.Global.Actual.get_all_nodes Yaks_connector.default_system_id Yaks_connector.default_tenant_id connector in
@@ -158,3 +163,44 @@ let start_ping_single_threaded myuuid connector =
   in
   let _ = run state in
   Lwt.return c
+
+
+let heartbeat_task self =
+    Logs.debug (fun m -> m "[heartbeat_task] Eclipse fog05 Heartbeat task start");
+    let p,c = Lwt.wait () in
+    let rec run self =
+      MVar.guarded self (fun state ->
+      let myuuid = (Apero.Option.get state.configuration.agent.uuid) in
+      let%lwt nodes = get_nodes myuuid state.yaks in
+      let%lwt available_nodes = Lwt_list.filter_map_p (fun nid ->
+        try%lwt
+          let%lwt res = Yaks_connector.Global.Actual.send_heartbeat Yaks_connector.default_system_id Yaks_connector.default_tenant_id nid myuuid state.yaks
+            >>= fun r -> Lwt.return (JSON.to_string (Apero.Option.get r.result)) >>=  fun r -> Logs.debug (fun m -> m "[heartbeat_task] r is %s" r); Lwt.return (FTypes.heartbeat_info_of_string r) in
+          let timestamp = Unix.gettimeofday () in
+          Logs.debug (fun m -> m "[heartbeat_task] Node heartbeat for %s in %f" res.nodeid timestamp);
+          Lwt.return @@ Some (nid,timestamp)
+        with
+        | Fos_errors.FException exn ->
+          Logs.err (fun m -> m "[heartbeat_task] Node %s timeout - Exception: %s" nid (Fos_errors.show_ferror exn));
+          Lwt.return None
+        | exn ->
+          Logs.err (fun m -> m "[heartbeat_task] Exception: %s" (Printexc.to_string exn));
+          Lwt.return None
+      ) nodes
+      in
+      let state = {state with available_nodes = available_nodes} in
+      MVar.return () state)
+      >>= fun _ ->
+      let timeout = Lwt_unix.sleep 5.0 >>= fun _ -> Lwt.return true in
+      let%lwt res = Lwt.choose [timeout;p] in
+      Logs.debug (fun m -> m "[heartbeat_task] Continue? %b" res);
+      match res with
+      | true ->
+        Logs.debug (fun m -> m "[heartbeat_task] Continues");
+        run self
+      | false ->
+        Logs.debug (fun m -> m "[heartbeat_task] Exiting");
+        Lwt.return_unit
+    in
+    let _ = run self in
+    Lwt.return c
