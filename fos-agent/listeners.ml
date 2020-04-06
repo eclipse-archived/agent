@@ -1,3 +1,17 @@
+(*********************************************************************************
+ * Copyright (c) 2020 ADLINK Technology Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0, or the Apache Software License 2.0
+ * which is available at https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ * Contributors: 1
+ *   Gabriele Baldoni (gabriele (dot) baldoni (at) adlinktech (dot) com ) - 0.2.0 Development iteration
+ *********************************************************************************)
+
+
 open Lwt.Infix
 open Fos_sdk
 open Agent_state
@@ -11,10 +25,10 @@ open Utils
       (match pl with
        | Some pl ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-PLUGIN - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-PLUGIN - Received plugin") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-PLUGIN - Name: %s" pl.name) in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-PLUGIN -  Calling the spawner by writing this on local desired") in
+         Logs.debug (fun m -> m "[cb_gd_plugin] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_plugin] - Received plugin");
+         Logs.debug (fun m -> m "[cb_gd_plugin] - Name: %s" pl.name);
+         Logs.debug (fun m -> m "[cb_gd_plugin] -  Calling the spawner by writing this on local desired");
          Yaks_connector.Local.Desired.add_node_plugin (Apero.Option.get self.configuration.agent.uuid) pl self.yaks >>= Lwt.return
        | None -> Lwt.return_unit)
     | true ->
@@ -29,8 +43,8 @@ open Utils
     | false ->
       (match fdu with
        | Some fdu -> MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-FDU - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-FDU - FDU Updated! Advertising on GA") in
+         Logs.debug (fun m -> m "[cb_gd_fdu] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_fdu] - FDU Updated! Advertising on GA");
          let fdu =
            match fdu.uuid with
            | Some _ -> fdu
@@ -53,11 +67,11 @@ open Utils
       (match img with
        | Some img ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-IMAGE - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-IMAGE - Image Updated! Advertising on GA") in
+         Logs.debug (fun m -> m "[cb_gd_image] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_image] - Image Updated! Advertising on GA");
          (match img.uuid with
           | Some id -> Yaks_connector.Global.Actual.add_image (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id id img self.yaks >>= Lwt.return
-          | None -> Lwt.return @@ Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-IMAGE - Ignoring Image as UUID is missing!!") >>= Lwt.return)
+          | None -> Logs.debug (fun m -> m "[cb_gd_image] - Ignoring Image as UUID is missing!!"); Lwt.return_unit)
        | None -> Lwt.return_unit)
     | true ->
       (match uuid with
@@ -72,11 +86,11 @@ open Utils
       (match flv with
        | Some flv ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-FLAVOR - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-FLAVOR - Flavor Updated! Advertising on GA") in
+         Logs.debug (fun m -> m "[cb_gd_flavor] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_flavor] - Flavor Updated! Advertising on GA");
          (match flv.uuid with
           | Some id -> Yaks_connector.Global.Actual.add_flavor (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id id flv self.yaks >>= Lwt.return
-          | None -> Lwt.return @@ Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-FLAVOR - Ignoring Flavor as UUID is missing!!") >>= Lwt.return)
+          | None -> Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-FLAVOR - Ignoring Flavor as UUID is missing!!"); Lwt.return_unit)
        | None -> Lwt.return_unit
       )
     | true ->
@@ -91,11 +105,11 @@ open Utils
       (match fdu with
        | Some fdu ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NODE-FDU - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NODE-FDU - FDU Updated! Agent will call the right plugin!") in
+         Logs.debug (fun m -> m "[cb_gd_node_fdu] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_node_fdu] - FDU Updated! Agent will call the right plugin!");
          let%lwt fdu_d = Yaks_connector.Global.Actual.get_catalog_fdu_info (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id fdu.fdu_id self.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
          let fdu_type = Fos_sdk.string_of_hv_type fdu_d.hypervisor in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-FDU - FDU Type %s" fdu_type) in
+         Logs.debug (fun m -> m "[cb_gd_node_fdu] - FDU Type %s" fdu_type);
          let%lwt plugins = Yaks_connector.Local.Actual.get_node_plugins (Apero.Option.get self.configuration.agent.uuid) self.yaks in
          let%lwt matching_plugins = Lwt_list.filter_map_p (fun e ->
              let%lwt pl = Yaks_connector.Local.Actual.get_node_plugin (Apero.Option.get self.configuration.agent.uuid) e self.yaks in
@@ -107,16 +121,16 @@ open Utils
          in
          (match matching_plugins with
           | [] ->
-            let _ = Logs.err (fun m -> m "[FOS-AGENT] - CB-GD-FDU - No plugin found for this FDU") in
+            Logs.err (fun m -> m "[cb_gd_node_fdu] - No plugin found for this FDU");
             let r = { fdu with status = `ERROR} in
             Yaks_connector.Global.Actual.add_node_fdu (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) r.fdu_id r.uuid r self.yaks >>= Lwt.return
           | _ ->
             let pl = List.hd matching_plugins in
-            let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-FDU - Calling %s plugin" pl.name) in
+            Logs.debug (fun m -> m "[cb_gd_node_fdu]- Calling %s plugin" pl.name);
             (* Here we should at least update the record interfaces and connection points *)
             match fdu.status with
             | `DEFINE ->
-              let _ = Logs.err (fun m -> m "[FOS-AGENT] - CB-GD-FDU - FDU Define it is not supposed to pass by this function") in
+              Logs.err (fun m -> m "[cb_gd_node_fdu] - FDU Define it is not supposed to pass by this function");
               Lwt.return_unit
             | _ -> Yaks_connector.Local.Desired.add_node_fdu (Apero.Option.get self.configuration.agent.uuid) pl.uuid fdu.fdu_id fdu.uuid fdu self.yaks >>= Lwt.return
          )
@@ -137,8 +151,8 @@ open Utils
       (match net with
        | Some net ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NET - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NET - vNET Updated! Agent will update actual store and call the right plugin!") in
+         Logs.debug (fun m -> m "[cb_gd_net_all] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Updated! Agent will update actual store and call the right plugin!");
          let%lwt _ = Yaks_connector.Global.Actual.add_network (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id net.uuid net self.yaks in
          (* let record = FTypesRecord.{uuid = net.uuid; status = `CREATE; properties = None; ip_configuration = net.ip_configuration; overlay = None; vni = None; mcast_addr = None; vlan_id = None; face = None} in *)
          (* Yaks_connector.Local.Desired.add_node_network (Apero.Option.get self.configuration.agent.uuid) net_p net.uuid record self.yaks *)
@@ -147,14 +161,14 @@ open Utils
     | true ->
       (match uuid with
        | Some netid -> MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NET - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NET - vNET Removed!") in
+         Logs.debug (fun m -> m "[cb_gd_net_all] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Removed!");
          let%lwt net_info = Yaks_connector.Local.Actual.get_node_network (Apero.Option.get self.configuration.agent.uuid) net_p netid self.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
          let net_info = {net_info with status = `DESTROY} in
          let%lwt _ = Yaks_connector.Local.Desired.add_node_network (Apero.Option.get self.configuration.agent.uuid) net_p netid net_info self.yaks in
          Yaks_connector.Global.Actual.remove_network (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id netid self.yaks >>= Lwt.return
        | None ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NET - vNET NO UUID!!!!") in
+         Logs.debug (fun m -> m "[cb_gd_net_all] - vNET NO UUID!!!!");
          Lwt.return_unit)
 
 
@@ -166,8 +180,8 @@ open Utils
       (match net with
        | Some net ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NET - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NET - vNET Updated! Agent will update actual store and call the right plugin!") in
+         Logs.debug (fun m -> m "[cb_gd_net] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_net] - vNET Updated! Agent will update actual store and call the right plugin!");
          (* let%lwt _ = Yaks_connector.Global.Actual.add_network (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id net.uuid net self.yaks in *)
          (* let record = FTypesRecord.{uuid = net.uuid; status = `CREATE; properties = None; ip_configuration = net.ip_configuration} in *)
          Yaks_connector.Local.Desired.add_node_network (Apero.Option.get self.configuration.agent.uuid) net_p net.uuid net self.yaks
@@ -176,14 +190,14 @@ open Utils
     | true ->
       (match uuid with
        | Some netid -> MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NET - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NET - vNET Removed!") in
+         Logs.debug (fun m -> m "[cb_gd_net] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_net]- vNET Removed!");
          let%lwt net_info = Yaks_connector.Local.Actual.get_node_network (Apero.Option.get self.configuration.agent.uuid) net_p netid self.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
          let net_info = {net_info with status = `DESTROY} in
          let%lwt _ = Yaks_connector.Local.Desired.add_node_network (Apero.Option.get self.configuration.agent.uuid) net_p netid net_info self.yaks in
          Yaks_connector.Global.Actual.remove_network (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id netid self.yaks >>= Lwt.return
        | None ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-NET - vNET NO UUID!!!!") in
+         Logs.debug (fun m -> m "[cb_gd_net] - vNET Missing UUID!!!!");
          Lwt.return_unit)
 
 
@@ -194,8 +208,8 @@ open Utils
       ( match cp with
         | Some cp ->
           MVar.read self >>= fun self ->
-          let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-CP - ##############") in
-          let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-CP - CP Updated! Agent will update actual store and call the right plugin!") in
+          Logs.debug (fun m -> m "[cb_gd_cp] - ##############");
+          Logs.debug (fun m -> m "[cb_gd_cp] CP Updated! Agent will update actual store and call the right plugin!");
           let%lwt _ = Yaks_connector.Global.Actual.add_port (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id cp.id cp self.yaks in
           let record = Infra.Descriptors.Network.{cp_id = cp.id; uuid = cp.id; status = `CREATE; properties = None; veth_face_name = None; br_name = None;cp_type= Some `VPORT; port_security_enabled=None; vld_ref = cp.vld_ref} in
           Yaks_connector.Local.Desired.add_node_port (Apero.Option.get self.configuration.agent.uuid) net_p record.uuid record self.yaks
@@ -216,8 +230,8 @@ open Utils
       (match router with
        | Some router ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-ROUTER - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-ROUTER - vRouter Updated! Agent will update actual store and call the right plugin!") in
+         Logs.debug (fun m -> m "[cb_gd_router] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_router] - vRouter Updated! Agent will update actual store and call the right plugin!");
          (* Converting to record *)
          let rid = (Apero.Option.get_or_default router.uuid (Apero.Uuid.to_string (Apero.Uuid.make ()))) in
          let%lwt port_records = Lwt_list.mapi_p (fun i (e:Router.router_port) ->
@@ -243,14 +257,14 @@ open Utils
     | true ->
       (match uuid with
        | Some routerid -> MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-ROUTER - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-ROUTER - vRouter Removed!") in
+         Logs.debug (fun m -> m "[cb_gd_router] - ##############");
+         Logs.debug (fun m -> m "[cb_gd_router] vRouter Removed!");
          let%lwt router_info = Yaks_connector.Local.Actual.get_node_router (Apero.Option.get self.configuration.agent.uuid) net_p routerid self.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
          let router_info = {router_info with state = `DESTROY} in
          Yaks_connector.Local.Desired.add_node_router (Apero.Option.get self.configuration.agent.uuid) net_p routerid router_info self.yaks
        (* Yaks_connector.Global.Actual.reove_ (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id routerid self.yaks >>= Lwt.return *)
        | None ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-ROUTER - vRouter NO UUID!!!!") in
+         Logs.debug (fun m -> m "[cb_gd_router] - vRouter Missing UUID!!!!");
          Lwt.return_unit)
 
 
@@ -262,8 +276,8 @@ open Utils
       (match net with
        | Some net ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-NET - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-NET - vNET Updated! Advertising on GA") in
+         Logs.debug (fun m -> m "[cb_la_net] - ##############");
+         Logs.debug (fun m -> m "[cb_la_net] - vNET Updated! Advertising on GA");
          let nid = (Apero.Option.get self.configuration.agent.uuid) in
          (match net.status with
           | `DESTROY -> Yaks_connector.Global.Actual.remove_node_network (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id nid net.uuid self.yaks
@@ -284,8 +298,8 @@ open Utils
       (match cp with
        | Some cp ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-CP - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-CP - CP Updated! Advertising on GA") in
+         Logs.debug (fun m -> m "[cb_la_cp] - ##############");
+         Logs.debug (fun m -> m "[cb_la_cp] - CP Updated! Advertising on GA");
          let nid = (Apero.Option.get self.configuration.agent.uuid) in
          ( match cp.status with
            | `DESTROY -> Yaks_connector.Global.Actual.remove_node_port (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id nid cp.cp_id self.yaks
@@ -307,8 +321,8 @@ open Utils
       (match router with
        | Some router ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-ROUTER - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-ROUTER - vRouter Updated! Advertising on GA") in
+         Logs.debug (fun m -> m "[cb_la_router] - ##############");
+         Logs.debug (fun m -> m "[cb_la_router] - vRouter Updated! Advertising on GA");
          let nid = (Apero.Option.get self.configuration.agent.uuid) in
          (match router.state with
           | `DESTROY -> Yaks_connector.Global.Actual.remove_node_router (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id nid router.uuid self.yaks
@@ -334,10 +348,10 @@ open Utils
       (match pl with
        | Some pl ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-PLUGIN - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-PLUGIN - Received plugin") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-PLUGIN - Name: %s" pl.name) in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-PLUGIN -  Plugin loaded advertising on GA") in
+         Logs.debug (fun m -> m "[cb_la_plugin] - ##############");
+         Logs.debug (fun m -> m "[cb_la_plugin] - Received plugin");
+         Logs.debug (fun m -> m "[cb_la_plugin] - Name: %s" pl.name);
+         Logs.debug (fun m -> m "[cb_la_plugin] -  Plugin loaded advertising on GA");
          Yaks_connector.Global.Actual.add_node_plugin (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) pl self.yaks >>= Lwt.return
        | None -> Lwt.return_unit)
     | true ->
@@ -353,8 +367,8 @@ open Utils
       (match ni with
        | Some ni ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-NI - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-NI - Updated node info advertising of GA") in
+         Logs.debug (fun m -> m "[cb_la_ni] - ##############");
+         Logs.debug (fun m -> m "[cb_la_ni] - Updated node info advertising of GA");
          Yaks_connector.Global.Actual.add_node_info (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) ni self.yaks >>= Lwt.return
        | None -> Lwt.return_unit)
     | true ->
@@ -370,8 +384,8 @@ open Utils
       (match ns with
        | Some ns ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-NI - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-NI - Updated node info advertising of GA") in
+         Logs.debug (fun m -> m "[cb_la_ns] ##############");
+         Logs.debug (fun m -> m "[cb_la_ns] - Updated node info advertising of GA");
          Yaks_connector.Global.Actual.add_node_status (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) ns self.yaks >>= Lwt.return
        | None -> Lwt.return_unit)
     | true ->
@@ -386,8 +400,8 @@ open Utils
       (match fdu with
        | Some fdu ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-NODE-FDU - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LA-NODE-FDU - FDU Updated! Advertising on GA") in
+         Logs.debug (fun m -> m "[cb_la_node_fdu] - ##############");
+         Logs.debug (fun m -> m "[cb_la_node_fdu]- FDU Updated! Advertising on GA");
          ( match fdu.status with
            | `UNDEFINE -> Yaks_connector.Global.Actual.remove_node_fdu (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid self.yaks
            | _ ->
@@ -408,16 +422,16 @@ open Utils
      (match fdu with
      | Some fdu ->
      MVar.read self >>= fun self ->
-     let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-CNODE-FDU - ##############") in
-     let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-CNODE-FDU - FDU Updated! Agent will call the right plugin!") in
+     Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-CNODE-FDU - ##############") in
+     Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-CNODE-FDU - FDU Updated! Agent will call the right plugin!") in
      let%lwt fdu_d = Yaks_connector.Global.Actual.get_fdu_info (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id fdu.fdu_uuid self.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
      let fdu_type = Fos_sdk.string_of_hv_type fdu_d.hypervisor in
-     let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-CNODE-FDU - FDU Type %s" fdu_type) in
+     Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-CNODE-FDU - FDU Type %s" fdu_type) in
      let%lwt plugins = Yaks_connector.LocalConstraint.Actual.get_node_plugins nodeid self.yaks in
      Lwt_list.iter_p (fun e ->
      let%lwt pl = Yaks_connector.LocalConstraint.Actual.get_node_plugin nodeid e self.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
      if String.uppercase_ascii (pl.name) = String.uppercase_ascii (fdu_type) then
-     let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-FDU - Calling %s plugin" pl.name) in
+     Logs.debug (fun m -> m "[FOS-AGENT] - CB-GD-FDU - Calling %s plugin" pl.name) in
      Yaks_connector.LocalConstraint.Desired.add_node_fdu nodeid pl.uuid fdu.fdu_uuid fdu self.yaks >>= Lwt.return
      else
      Lwt.return_unit
@@ -437,8 +451,8 @@ open Utils
       (match fdu with
        | Some fdu ->
          MVar.read self >>= fun _ ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NODE-FDU - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NODE-FDU - FDU Updated! Advertising on GA") in
+         Logs.debug (fun m -> m "[cb_lac_node_fdu] - ##############");
+         Logs.debug (fun m -> m "[cb_lac_node_fdu] - FDU Updated! Advertising on GA");
          ( match fdu.status with
            | `UNDEFINE -> Lwt.return_unit
            (* Yaks_connector.Global.Actual.remove_node_fdu (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id nodeid fdu.fdu_uuid self.yaks *)
@@ -457,10 +471,10 @@ open Utils
       (match pl with
        | Some pl ->
          MVar.read self >>= fun self ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-PLUGIN - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-PLUGIN - Received plugin") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-PLUGIN - Name: %s" pl.name) in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-PLUGIN -  Plugin loaded advertising on GA") in
+         Logs.debug (fun m -> m "[cb_lac_plugin] - ##############");
+         Logs.debug (fun m -> m "[cb_lac_plugin] - Received plugin");
+         Logs.debug (fun m -> m "[cb_lac_plugin] - Name: %s" pl.name);
+         Logs.debug (fun m -> m "[cb_lac_plugin] -  Plugin loaded advertising on GA");
          Yaks_connector.Global.Actual.add_node_plugin (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id nodeid pl self.yaks >>= Lwt.return
        | None -> Lwt.return_unit)
     | true ->
@@ -471,10 +485,10 @@ open Utils
 
   (* let cb_lac_node_configuration self nodeid (pl:FTypes.node_info) =
      MVar.read self >>= fun self ->
-     let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NODE-CONF - ##############") in
-     let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NODE-CONF - Received plugin") in
-     let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NODE-CONF - Name: %s" pl.name) in
-     let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NODE-CONF -  Plugin loaded advertising on GA") in
+     Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NODE-CONF - ##############") in
+     Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NODE-CONF - Received plugin") in
+     Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NODE-CONF - Name: %s" pl.name) in
+     Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NODE-CONF -  Plugin loaded advertising on GA") in
      Yaks_connector.Global.Actual.add_node_configuration (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id nodeid pl self.yaks >>= Lwt.return
      in *)
   let cb_lac_nodes self (ni:FTypes.node_info option) (is_remove:bool) (uuid:string option) =
@@ -483,8 +497,8 @@ open Utils
       (match ni with
        | Some ni ->
          MVar.guarded self @@ fun state ->
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NI - ##############") in
-         let _ = Logs.debug (fun m -> m "[FOS-AGENT] - CB-LAC-NI - Updated node info advertising of GA") in
+         Logs.debug (fun m -> m "[cb_lac_nodes] - ##############");
+         Logs.debug (fun m -> m "[cb_lac_nodes] - Updated node info advertising on GA");
          let intid = ni.uuid in
          let extid = Apero.Uuid.to_string @@ Apero.Uuid.make () in
          let ext_ni = {ni with uuid = extid } in
@@ -501,7 +515,7 @@ open Utils
          MVar.return () {state with constrained_nodes =  ConstraintMap.remove nid state.constrained_nodes}
        | None -> Lwt.return_unit)
 
-  let cb_ga_nodes self (ni:FTypes.node_info option) (is_remove:bool) (uuid:string option) =
+  (* let cb_ga_nodes self (ni:FTypes.node_info option) (is_remove:bool) (uuid:string option) =
     try%lwt
       (match is_remove with
       | false ->
@@ -514,20 +528,18 @@ open Utils
           | _ ->
           Logs.debug (fun m -> m "[cb_ga_nodes] - ##############");
           Logs.debug (fun m -> m "[cb_ga_nodes] - Received Node Advertisement - %s" nid);
-          let i = List.length (Heartbeat.HeartbeatMap.bindings state.ping_tasks) in
-          let port = 9190 + i in
           (* let ping_task_starter = Utils.start_ping_task (Apero.Option.get state.configuration.agent.uuid) state.yaks nid in *)
           let open FTypes in
           let faces_info = List.filter (fun fi -> (Utils.filter_face fi.intf_name)) node_info.network in
           (* extract address information *)
           let ip_infos = List.map (fun fi -> (fi.intf_configuration.ipv4_address,fi.intf_configuration.ipv6_address)) faces_info in
-          let%lwt hb_info = Lwt_list.mapi_p
-              (fun j (ip,_ )->
+          let%lwt hb_info = Lwt_list.map_p
+              (fun (ip,_ ) ->
                 let blen = 1024 in
                 let rbuf = Bytes.create blen in
                 let task = MVar.create Heartbeat.{peer=nid; timeout=2.0; peer_address=ip; rbuf=rbuf; blen=blen; avg=0.0; packet_sent=0; packet_received=0; bytes_sent=0; bytes_received=0; run=true} in
-                Logs.debug (fun m -> m "[cb_ga_nodes] - Spawing task - %s - %s - %d" nid ip (port+j));
-                let _ = Utils.start_ping_task (Apero.Option.get state.configuration.agent.uuid) state.yaks nid ip (port+j) task in
+                Logs.debug (fun m -> m "[cb_ga_nodes] - Spawing task - %s - %s" nid ip);
+                let _ = Utils.start_ping_task (Apero.Option.get state.configuration.agent.uuid) state.yaks nid ip task in
                 Lwt.return task
               ) ip_infos
           in
@@ -547,14 +559,17 @@ open Utils
       | true ->
         (match uuid with
         | Some nid -> MVar.guarded self (fun state ->
-            Logs.debug (fun m -> m "[cb_ga_nodes] Node disappeared - %s" nid);
-            let tasks = Heartbeat.HeartbeatMap.find nid state.ping_tasks in
-            let state  = {state with ping_tasks =  Heartbeat.HeartbeatMap.remove nid  state.ping_tasks } in
-            let%lwt _ = Lwt_list.iter_p (fun task -> MVar.guarded task (fun (t : Heartbeat.statistics) ->   MVar.return () {t with run = false})) tasks in
-            Logs.debug (fun m -> m "[cb_ga_nodes]- Stopping ping tasks for - %s" nid);
-            MVar.return () state)
+            match Heartbeat.HeartbeatMap.mem nid state.ping_tasks with
+            | false ->  MVar.return () state
+            | true ->
+              Logs.debug (fun m -> m "[cb_ga_nodes] Node disappeared - %s" nid);
+              let tasks = Heartbeat.HeartbeatMap.find nid state.ping_tasks in
+              let state  = {state with ping_tasks =  Heartbeat.HeartbeatMap.remove nid  state.ping_tasks } in
+              let%lwt _ = Lwt_list.iter_p (fun task -> MVar.guarded task (fun (t : Heartbeat.statistics) ->   MVar.return () {t with run = false})) tasks in
+              Logs.debug (fun m -> m "[cb_ga_nodes]- Stopping ping tasks for - %s" nid);
+              MVar.return () state)
         | None -> Lwt.return_unit))
     with
     | exn ->
       Logs.err (fun m -> m "[cb_ga_nodes] Exception %s raised:\n%s" (Printexc.to_string exn) (Printexc.get_backtrace ()));
-      Lwt.return_unit
+      Lwt.return_unit *)

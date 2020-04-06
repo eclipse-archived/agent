@@ -1,5 +1,5 @@
 (*********************************************************************************
- * Copyright (c) 2018 ADLINK Technology Inc.
+ * Copyright (c) 2020 ADLINK Technology Inc.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License 2.0 which is available at
@@ -8,7 +8,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
  * Contributors: 1
- *   Gabriele Baldoni (gabriele (dot) baldoni (at) adlinktech (dot) com ) - OCaml implementation
+ *   Gabriele Baldoni (gabriele (dot) baldoni (at) adlinktech (dot) com ) - 0.2.0 Development iteration
  *********************************************************************************)
 open Lwt.Infix
 open Fos_sdk
@@ -17,56 +17,43 @@ open Agent_state
 (* open Fos_errors *)
 
 
-
-
-let max_tentatives = 5
-
 let register_handlers completer () =
-  let _ = Lwt_unix.on_signal Sys.sigint (
-      fun _ -> Lwt.wakeup_later completer ())
-  in
-  Lwt_unix.on_signal Sys.sigterm (
-    fun _ -> Lwt.wakeup_later completer ())
-
-let react_to_plugins loader data =
-  ignore loader;
-  Lwt_io.printf ">>>> [FOS] OBSERVER\n"
-  >>= fun _ -> Lwt_list.iter_p (fun (k,v) ->
-      Lwt_io.printf ">>>> [FOS] [OBS] K %s - V: %s\n"  (Yaks_types.Path.to_string k) (Yaks_types.Value.to_string v)
-    ) data
-
-
-
-
+  try%lwt
+    let _ = Lwt_unix.on_signal Sys.sigint (fun _ -> Logs.debug (fun m -> m "[register_handlers] Received SIGINT"); Lwt.wakeup_later completer false) in
+    let _ = Lwt_unix.on_signal Sys.sigterm (fun _ ->Logs.debug (fun m -> m "[register_handlers] Received SIGTERM"); Lwt.wakeup_later completer false) in
+    Lwt.return_unit
+  with
+    | exn ->
+      Logs.err (fun m -> m "[register_handlers] Exception %s raised:\n%s" (Printexc.to_string exn) (Printexc.get_backtrace ()));
+      Lwt.return_unit
 
 (* MAIN *)
 
-let main_loop state promise =
-  let _ = Lwt_io.printf "[FOSAGENT] Up & Running!\n" in
-  let _ =  Lwt_io.flush_all () in
-  Lwt.join [promise] >>= fun _ ->
+let main_loop state promise ping_completer =
+  Logs.info (fun m -> m "Eclipse fog05 Agent - Up & Running!");
+  promise >>= fun run ->
+  Logs.debug (fun m -> m "[main_loop] - Completer filled with %b" run);
+  Logs.debug (fun m -> m "[main_loop] - Received signal... shutdown agent");
+  Lwt.wakeup_later ping_completer false;
   MVar.guarded state @@ fun self ->
-  let self = match self.spawner with
-    | Some p ->
-      p#kill Sys.sigint;
-      {self with spawner = None}
-    | None ->   self
-  in
   (* Here we should store all information in a persistent YAKS
    * and remove them from the in memory YAKS
   *)
   Yaks_connector.close_connector self.yaks
   >>= fun _ ->
-  MVar.return (Lwt_io.printf "Bye!\n") self
+  Logs.info (fun m -> m "Eclipse fog05 Agent - Bye!");
+  MVar.return () self
 
 
 
 let agent verbose_flag debug_flag configuration custom_uuid =
+  Random.self_init();
   let level, reporter = (match verbose_flag with
       | true -> Apero.Result.get @@ Logs.level_of_string "debug" ,  (Logs_fmt.reporter ())
       | false -> Apero.Result.get @@ Logs.level_of_string "error",  (Fos_sdk.get_unix_syslog_reporter ())
     )
   in
+
   Logs.set_level level;
   Logs.set_reporter reporter;
   let prom,c = Lwt.wait () in
@@ -82,21 +69,16 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   ignore @@ close_out pid_out;
   let sys_id = Apero.Option.get @@ conf.agent.system in
   let uuid = (Apero.Option.get conf.agent.uuid) in
-  let plugin_path = conf.plugins.plugin_path in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - DEBUG IS: %b"  debug_flag) in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - ##############") in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - Agent Configuration is:") in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - SYSID: %s" sys_id) in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - UUID: %s"  uuid) in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - LLDPD: %b" conf.agent.enable_lldp) in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - SPAWNER: %b" conf.agent.enable_spawner) in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - PID FILE: %s" conf.agent.pid_file) in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - YAKS Server: %s" conf.agent.yaks) in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - MGMT Interface: %s" conf.agent.mgmt_interface) in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - Plugin Directory: %s" plugin_path) in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - AUTOLOAD: %b" conf.plugins.autoload) in
-  let _ = Logs.debug (fun m -> m "[FOS-AGENT] - INIT - Plugins:") in
-  List.iter (fun p -> ignore @@ Logs.debug (fun m -> m "[FOS-AGENT] - INIT - %s" p )) (Apero.Option.get_or_default conf.plugins.auto []);
+  Logs.debug (fun m -> m "[agent] - INIT - DEBUG IS: %b"  debug_flag);
+  Logs.debug (fun m -> m "[agent] - INIT - ##############");
+  Logs.debug (fun m -> m "[agent] - INIT - Agent Configuration is:");
+  Logs.debug (fun m -> m "[agent] - INIT - SYSID: %s" sys_id);
+  Logs.debug (fun m -> m "[agent] - INIT - UUID: %s"  uuid);
+  Logs.debug (fun m -> m "[agent] - INIT - LLDPD: %b" conf.agent.enable_lldp);
+  Logs.debug (fun m -> m "[agent] - INIT - SPAWNER: %b" conf.agent.enable_spawner);
+  Logs.debug (fun m -> m "[agent] - INIT - PID FILE: %s" conf.agent.pid_file);
+  Logs.debug (fun m -> m "[agent] - INIT - YAKS Server: %s" conf.agent.yaks);
+  Logs.debug (fun m -> m "[agent] - INIT - MGMT Interface: %s" conf.agent.mgmt_interface);
   (* let sys_info = system_info sys_id uuid in *)
   let%lwt yaks = Yaks_connector.get_connector conf in
   let%lwt fim = Fos_fim_api.FIMAPI.connect ~locator:conf.agent.yaks () in
@@ -105,8 +87,7 @@ let agent verbose_flag debug_flag configuration custom_uuid =
    * recoved from that
    *)
   let cli_parameters = [configuration] in
-  (* let self = {yaks; configuration = conf; cli_parameters; spawner = None; completer = c; constrained_nodes = ConstraintMap.empty; fim_api = fim; faem_api = faem} in *)
-  let self = {yaks; configuration = conf; cli_parameters; spawner = None; completer = c; constrained_nodes = ConstraintMap.empty; fim_api = fim; ping_tasks = Heartbeat.HeartbeatMap.empty } in
+  let self = {yaks; configuration = conf; cli_parameters; completer = c; constrained_nodes = ConstraintMap.empty; fim_api = fim; } in
   let state = MVar.create self in
   let%lwt _ = MVar.read state >>= fun state ->
     Yaks_connector.Global.Actual.add_node_configuration sys_id Yaks_connector.default_tenant_id uuid conf state.yaks
@@ -140,16 +121,6 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "onboard_fdu" (Evals.eval_onboard_fdu state) yaks in
   let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "define_fdu" (Evals.eval_define_fdu state) yaks in
   let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "check_node_compatibilty" (Evals.eval_check_fdu state) yaks in
-  (* AE Evals *)
-  let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "onboard_ae" (Evals.eval_onboard_ae state) yaks in
-  let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "instantiate_ae" (Evals.eval_instantiate_ae state) yaks in
-  let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "terminate_ae" (Evals.eval_terminate_ae state) yaks in
-  let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "offload_ae" (Evals.eval_offload_ae state) yaks in
-  (* Entity EVals *)
-  let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "onboard_entity" (Evals.eval_onboard_entity state) yaks in
-  (* let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "instantiate_entity" (Evals.eval_instantiate_entity state) yaks in *)
-  (* let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "terminate_entity" (Evals.eval_terminate_entity state) yaks in *)
-  let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "offload_entity" (Evals.eval_offload_entity state) yaks in
   (* Constraint Eval  *)
   let%lwt _ = Yaks_connector.LocalConstraint.Actual.add_agent_eval uuid "get_fdu_info" (Evals.eval_get_fdu_info state) yaks in
   (* Registering listeners *)
@@ -165,7 +136,7 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   (* Global Actual with NodeID *)
   let%lwt _ = Yaks_connector.Global.Desired.observe_node_routers sys_id Yaks_connector.default_tenant_id uuid (Listeners.cb_gd_router state) yaks in
   (* Global Actual *)
-  let%lwt _ = Yaks_connector.Global.Actual.observe_nodes sys_id Yaks_connector.default_tenant_id (Listeners.cb_ga_nodes state) yaks in
+  (* let%lwt _ = Yaks_connector.Global.Actual.observe_nodes sys_id Yaks_connector.default_tenant_id (Listeners.cb_ga_nodes state) yaks in *)
   (* Local Actual Listeners *)
   let%lwt _ = Yaks_connector.Local.Actual.observe_node_plugins uuid (Listeners.cb_la_plugin state) yaks in
   let%lwt _ = Yaks_connector.Local.Actual.observe_node_info uuid (Listeners.cb_la_ni state) yaks in
@@ -177,21 +148,22 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   let%lwt _ = Yaks_connector.LocalConstraint.Actual.observe_nodes (Listeners.cb_lac_nodes state) yaks in
   (* Starting Ping Server, listening on all interfaces, on port 9091  *)
   let _ = Heartbeat.run_server (Lwt_unix.ADDR_INET ((Unix.inet_addr_of_string "0.0.0.0"), 9091)) uuid in
-  (* preparing ping informations *)
-  let%lwt _ = Utils.prepare_ping_tasks state in
+
+  let%lwt c = Utils.start_ping_single_threaded uuid yaks in
+
+  (* preparing ping information *)
+  (* let%lwt _ = Utils.prepare_ping_tasks state in
   let%lwt _ = MVar.read state >>= fun self ->
-    let port = 9190 in
     let pings = Heartbeat.HeartbeatMap.bindings self.ping_tasks in
-    Lwt_list.iteri_p (fun i (nid,tasks) ->
+    Lwt_list.iter_p (fun (nid,tasks) ->
       let ping_task_starter = Utils.start_ping_task (Apero.Option.get self.configuration.agent.uuid) self.yaks nid in
-      let port = port + (i*100) in
-      Lwt_list.iteri_p ( fun j task ->
+      Lwt_list.iter_p ( fun task ->
       let%lwt ip = MVar.read task >>= fun (t : Heartbeat.statistics) -> Lwt.return t.peer_address in
-      ping_task_starter ip (port+j) task
+      ping_task_starter ip task
       ) tasks
     ) pings
-  in
-  main_loop state prom
+  in *)
+  main_loop state prom c
 
 (* AGENT CMD  *)
 
