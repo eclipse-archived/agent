@@ -779,7 +779,6 @@ open Utils
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
   (*  *)
   let eval_heartbeat myuuid self (props:Apero.properties) =
-    ignore props;
     Logs.debug (fun m -> m "[eval_heartbeat]- ##############");
     Logs.debug (fun m -> m "[eval_heartbeat] - Properties: %s" (Apero.Properties.to_string props));
     let  _ = MVar.guarded self (fun state ->
@@ -802,3 +801,31 @@ open Utils
     let eval_res = FAgentTypes.{result = Some (JSON.of_string (FTypes.string_of_heartbeat_info result)) ; error = None; error_msg = None} in
     Logs.debug (fun m -> m "[eval_heartbeat] - Returning: %s" (FAgentTypes.string_of_eval_result eval_res));
     Lwt.return @@  FAgentTypes.string_of_eval_result eval_res
+  (*  *)
+  let eval_run_fdu myuuid instanceid self _ =
+    Logs.debug (fun m -> m "[eval_run_fdu]- ##############");
+    Logs.debug (fun m -> m "[eval_run_fdu]- InstanceID : %s" instanceid);
+    MVar.read self >>= fun state ->
+    let%lwt res = Yaks_connector.Local.Actual.run_fdu_in_node myuuid instanceid state.yaks in
+    Lwt.return @@  FAgentTypes.string_of_eval_result res
+  (*  *)
+  let eval_log_fdu myuuid instanceid self _ =
+    Logs.debug (fun m -> m "[eval_log_fdu]- ##############");
+    Logs.debug (fun m -> m "[eval_log_fdu]- InstanceID : %s" instanceid);
+    MVar.read self >>= fun state ->
+    let%lwt res = Yaks_connector.Local.Actual.log_fdu_in_node myuuid instanceid state.yaks in
+    Lwt.return @@  FAgentTypes.string_of_eval_result res
+  (*  *)
+  let eval_ls_fdu myuuid instanceid self _ =
+    Logs.debug (fun m -> m "[eval_ls_fdu]- ##############");
+    Logs.debug (fun m -> m "[eval_ls_fdu]- InstanceID : %s" instanceid);
+    MVar.read self >>= fun state ->
+    let%lwt res = Yaks_connector.Local.Actual.log_fdu_in_node myuuid instanceid state.yaks in
+    Lwt.return @@  FAgentTypes.string_of_eval_result res
+    (*  *)
+  let eval_file_fdu myuuid instanceid self filename =
+    Logs.debug (fun m -> m "[eval_ls_fdu]- ##############");
+    Logs.debug (fun m -> m "[eval_ls_fdu]- InstanceID : %s" instanceid);
+    MVar.read self >>= fun state ->
+    let%lwt res = Yaks_connector.Local.Actual.file_fdu_in_node myuuid instanceid filename state.yaks in
+    Lwt.return @@  FAgentTypes.string_of_eval_result res
