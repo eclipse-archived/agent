@@ -820,7 +820,7 @@ open Utils
     Logs.debug (fun m -> m "[eval_ls_fdu]- ##############");
     Logs.debug (fun m -> m "[eval_ls_fdu]- InstanceID : %s" instanceid);
     MVar.read self >>= fun state ->
-    let%lwt res = Yaks_connector.Local.Actual.log_fdu_in_node myuuid instanceid state.yaks in
+    let%lwt res = Yaks_connector.Local.Actual.ls_fdu_in_node myuuid instanceid state.yaks in
     Lwt.return @@  FAgentTypes.string_of_eval_result res
     (*  *)
   let eval_file_fdu myuuid instanceid self filename =
