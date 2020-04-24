@@ -394,22 +394,38 @@ open Utils
          Yaks_connector.Global.Actual.remove_node_status (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id nid self.yaks >>= Lwt.return
        | None -> Lwt.return_unit)
 
-  let cb_la_node_fdu self (fdu:Infra.Descriptors.FDU.record option) (is_remove:bool) (fduid:string option) (instanceid:string option) =
+  let cb_la_node_fdu state (fdu:Infra.Descriptors.FDU.record option) (is_remove:bool) (fduid:string option) (instanceid:string option) =
     match is_remove with
     | false ->
       (match fdu with
        | Some fdu ->
-         MVar.read self >>= fun self ->
+         MVar.read state >>= fun self ->
          Logs.debug (fun m -> m "[cb_la_node_fdu] - ##############");
          Logs.debug (fun m -> m "[cb_la_node_fdu]- FDU Updated! Advertising on GA");
          ( match fdu.status with
            | `UNDEFINE -> Yaks_connector.Global.Actual.remove_node_fdu (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid self.yaks
+           | `CONFIGURE ->
+            let run_f = (Evals.eval_run_fdu (Apero.Option.get self.configuration.agent.uuid) fdu.uuid state) in
+            let ls_f = (Evals.eval_ls_fdu (Apero.Option.get self.configuration.agent.uuid) fdu.uuid state) in
+            let log_f = (Evals.eval_log_fdu (Apero.Option.get self.configuration.agent.uuid) fdu.uuid state) in
+            let file_f = (Evals.eval_file_fdu (Apero.Option.get self.configuration.agent.uuid) fdu.uuid state) in
+            let _ = Yaks_connector.Global.Actual.add_fdu_run_eval (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid run_f self.yaks in
+            let _ = Yaks_connector.Global.Actual.add_fdu_ls_eval (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid ls_f self.yaks in
+            let _ = Yaks_connector.Global.Actual.add_fdu_log_eval (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid log_f self.yaks in
+            let _ = Yaks_connector.Global.Actual.add_fdu_file_eval (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid file_f self.yaks in
+            Yaks_connector.Global.Actual.add_node_fdu (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid fdu self.yaks >>= Lwt.return
+           | `CLEAN ->
+            let _ = Yaks_connector.Global.Actual.remove_fdu_run_eval (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid self.yaks in
+            let _ = Yaks_connector.Global.Actual.remove_fdu_log_eval (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid self.yaks in
+            let _ = Yaks_connector.Global.Actual.remove_fdu_ls_eval (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid self.yaks in
+            let _ = Yaks_connector.Global.Actual.remove_fdu_file_eval (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid self.yaks in
+            Yaks_connector.Global.Actual.add_node_fdu (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid fdu self.yaks >>= Lwt.return
            | _ ->
              Yaks_connector.Global.Actual.add_node_fdu (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fdu.fdu_id fdu.uuid fdu self.yaks >>= Lwt.return)
        | None -> Lwt.return_unit)
     | true ->
       (match( fduid,instanceid)  with
-       | Some fduid , Some instanceid -> MVar.read self >>= fun self ->
+       | Some fduid , Some instanceid -> MVar.read state >>= fun self ->
          Yaks_connector.Global.Actual.remove_node_fdu (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get self.configuration.agent.uuid) fduid instanceid self.yaks >>= Lwt.return
        | (_,_) -> Lwt.return_unit)
 
