@@ -802,11 +802,18 @@ open Utils
     Logs.debug (fun m -> m "[eval_heartbeat] - Returning: %s" (FAgentTypes.string_of_eval_result eval_res));
     Lwt.return @@  FAgentTypes.string_of_eval_result eval_res
   (*  *)
-  let eval_run_fdu myuuid instanceid self _ =
-    Logs.debug (fun m -> m "[eval_run_fdu]- ##############");
-    Logs.debug (fun m -> m "[eval_run_fdu]- InstanceID : %s" instanceid);
+    let eval_start_fdu myuuid instanceid self env =
+    Logs.debug (fun m -> m "[eval_start_fdu]- ##############");
+    Logs.debug (fun m -> m "[eval_start_fdu]- InstanceID : %s Env: %s" instanceid env);
     MVar.read self >>= fun state ->
-    let%lwt res = Yaks_connector.Local.Actual.run_fdu_in_node myuuid instanceid state.yaks in
+    let%lwt res = Yaks_connector.Local.Actual.start_fdu_in_node myuuid instanceid env state.yaks in
+    Lwt.return @@  FAgentTypes.string_of_eval_result res
+  (*  *)
+  let eval_run_fdu myuuid instanceid self env =
+    Logs.debug (fun m -> m "[eval_run_fdu]- ##############");
+    Logs.debug (fun m -> m "[eval_start_fdu]- InstanceID : %s Env: %s" instanceid env);
+    MVar.read self >>= fun state ->
+    let%lwt res = Yaks_connector.Local.Actual.run_fdu_in_node myuuid instanceid env state.yaks in
     Lwt.return @@  FAgentTypes.string_of_eval_result res
   (*  *)
   let eval_log_fdu myuuid instanceid self _ =
