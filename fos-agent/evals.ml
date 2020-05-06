@@ -515,12 +515,13 @@ open Utils
   (* FDU Requirements Checks *)
   (* At Intitial implementation just checks cpu architecture, ram and if there is a plugin for the FDU
    * More checks needed:
-   * CPU Count
-   * CPU Freq
+   * CPU Count : done
+   * CPU Freq : done
    * Disk space
    * GPUs
    * FPGAs
    * I/O Devices
+   * Image in case the image file starts with file://
      And idea can be having some filters functions that return boolean value and run this function one after the other using AND logical operation
      eg.
      let compatible = true in
@@ -558,11 +559,13 @@ open Utils
           | _ -> true
         in
         Logs.debug (fun m -> m "[eval_check_fdu] - CPU Arch Check: %s = %s ? %b" fdu_cp.cpu_arch ncpu.arch ((String.compare fdu_cp.cpu_arch ncpu.arch) == 0));
+        Logs.debug (fun m -> m "[eval_check_fdu] - CPU Number Check: %d <= %d ? %b" fdu_cp.cpu_min_count (List.length ninfo.cpu) (fdu_cp.cpu_min_count <= (List.length ninfo.cpu)));
+        Logs.debug (fun m -> m "[eval_check_fdu] - CPU Freq Check: %d <= %d ? %b" fdu_cp.cpu_min_freq (Float.to_int ncpu.frequency) (fdu_cp.cpu_min_freq <= (Float.to_int ncpu.frequency)));
         Logs.debug (fun m -> m "[eval_check_fdu] - RAM Size Check: %b" (fdu_cp.ram_size_mb <= ninfo.ram.size));
         Logs.debug (fun m -> m "[eval_check_fdu] - Plugin Check: %b" has_plugin );
-        match ((String.compare fdu_cp.cpu_arch ncpu.arch) == 0),(fdu_cp.ram_size_mb <= ninfo.ram.size), has_plugin with
-        | (true, true, true) -> Lwt.return true
-        | (_,_,_) -> Lwt.return false
+        match ((String.compare fdu_cp.cpu_arch ncpu.arch) == 0),(fdu_cp.ram_size_mb <= ninfo.ram.size), has_plugin, (fdu_cp.cpu_min_count <= (List.length ninfo.cpu)), (fdu_cp.cpu_min_freq <= (Float.to_int ncpu.frequency))  with
+        | (true, true, true, true, true) -> Lwt.return true
+        | (_,_,_,_,_) -> Lwt.return false
       in
       let%lwt res = compare comp_requirements node_info in
       let res = match res with
