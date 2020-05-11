@@ -365,6 +365,70 @@ open Utils
     | exn ->
       let eval_res = FAgentTypes.{result = None ; error = Some 11; error_msg = Some (Printexc.to_string exn)} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
+  (* FDU schedule *)
+  let eval_schedule_fdu self (props:Apero.properties) =
+    Logs.debug (fun m -> m "[eval_schedule_fdu] - ##############");
+    Logs.debug (fun m -> m "[eval_schedule_fdu] - Properties: %s" (Apero.Properties.to_string props));
+
+    try%lwt
+      MVar.read self >>= fun state ->
+      let sysid =  (Apero.Option.get @@ state.configuration.agent.system) in
+      let tenantid =  Yaks_connector.default_tenant_id in
+      let fdu_uuid = Apero.Option.get @@ Apero.Properties.get "fdu_id" props in
+
+      let%lwt descriptor =
+        match%lwt Yaks_connector.Global.Actual.get_catalog_fdu_info sysid tenantid fdu_uuid state.yaks with
+        | Some d -> Lwt.return d
+        | None ->
+          Logs.err (fun m -> m "[eval_schedule_fdu] - FDU not found");
+          Lwt.fail @@ FException (`NotFound (`MsgCode (( Printf.sprintf ("FDU %s not found in catalog") fdu_uuid),404) ))
+       in
+      let%lwt res =  Yaks_connector.Global.Actual.call_multi_node_check sysid Yaks_connector.default_tenant_id descriptor state.yaks in
+      match res with
+      | [] ->
+        Logs.err (fun m -> m "[eval_schedule_fdu] - No node found for this FDU");
+        Lwt.fail @@ FException (`NotFound (`MsgCode ("No node found for this FDU",404) ))
+      | nodes ->
+          let%lwt lst = Lwt_list.filter_map_p (fun (e:FAgentTypes.eval_result) ->
+            match e.result with
+            | Some r ->
+              let r = (FAgentTypes.compatible_node_response_of_string (JSON.to_string r)) in
+              (match r.is_compatible with
+               | true ->
+                Logs.info (fun m -> m "[eval_schedule_fdu] - Node %s is compatible" r.uuid );
+                Lwt.return (Some r.uuid)
+               | false -> Lwt.return None)
+            | None -> Lwt.return None
+          ) nodes
+         in
+         match lst with
+         | [] ->
+          Lwt.fail @@ FException (`NotFound (`MsgCode ("No node found for this FDU",404) ))
+         | compatibles ->
+            let destination = List.nth compatibles (Random.int (List.length compatibles)) in
+            Logs.info (fun m -> m "[eval_schedule_fdu] - Node %s is random selected as destination for %s " destination descriptor.id);
+            let%lwt record = Fos_fim_api.FDU.define fdu_uuid destination state.fim_api in
+            let eval_res = FAgentTypes.{result = Some (JSON.of_string (Infra.Descriptors.FDU.string_of_record record)) ; error = None; error_msg = None} in
+            Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
+    with
+      | FException ex ->
+        Logs.err (fun m -> m "[eval_schedule_fdu] - EXCEPTION: %s" (Fos_errors.show_ferror ex));
+        (match ex with
+        | `NotFound ei ->
+          (match ei with
+          | `MsgCode (err,code) ->
+            let eval_res = FAgentTypes.{result = None ; error = Some code; error_msg = Some err} in
+            Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
+          | _  ->
+            let eval_res = FAgentTypes.{result = None ; error = Some 500; error_msg = Some (Fos_errors.show_ferror ex)} in
+            Lwt.return @@ FAgentTypes.string_of_eval_result eval_res)
+        | _ ->
+          let eval_res = FAgentTypes.{result = None ; error = Some 500; error_msg = Some (Fos_errors.show_ferror ex)} in
+          Lwt.return @@ FAgentTypes.string_of_eval_result eval_res)
+      | exn ->
+        Logs.err (fun m -> m "[eval_schedule_fdu] - EXCEPTION: %s" (Printexc.to_string exn));
+        let eval_res = FAgentTypes.{result = None ; error = Some 500; error_msg = Some (Printexc.to_string exn)} in
+        Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
 
   (* FDU Onboard in Catalog -- this may be moved to FOrcE *)
   let eval_onboard_fdu self (props:Apero.properties) =
@@ -522,6 +586,7 @@ open Utils
    * RAM size: done
    * Disk space : done
    * Image in case the image file starts with file:// : done
+   * Command if starts with / : done
    * Interfaces in case they are bridged or physical : done
 
    (* Following requirements cannot be checked today because of lack of discovery from OS Plugins *)
@@ -581,7 +646,17 @@ open Utils
               | true ->
                 let fname = String.sub i.uri 7 ((String.length i.uri)-7) in
                 Sys.file_exists fname
-
+              )
+            | None -> true
+          in
+          let command_check =
+            match descriptor.command with
+            | Some i ->
+              let file_re = Str.regexp "/*" in
+              (match Str.string_match file_re i.binary 0 with
+              | false -> true
+              | true ->
+                Sys.file_exists i.binary
               )
             | None -> true
           in
@@ -609,8 +684,9 @@ open Utils
           Logs.debug (fun m -> m "[eval_check_fdu] - RAM Size Check: %f <= %f ?  %b" fdu_cp.ram_size_mb ninfo.ram.size ram_size_check);
           Logs.debug (fun m -> m "[eval_check_fdu] - Disk Size Check: %f <= %f ?  %b" fdu_cp.storage_size_gb ndisk.dimension disk_size_check);
           Logs.debug (fun m -> m "[eval_check_fdu] - Image Check: %b" image_check);
+          Logs.debug (fun m -> m "[eval_check_fdu] - Command Check: %b" image_check);
           Logs.debug (fun m -> m "[eval_check_fdu] - Interfaces Check: %b" interfaces_check);
-          let res = has_plugin || cpu_arch_check || cpu_freq_check || cpu_number_check || ram_size_check || disk_size_check || image_check || interfaces_check in
+          let res = has_plugin || cpu_arch_check || cpu_freq_check || cpu_number_check || ram_size_check || disk_size_check || image_check || command_check || interfaces_check in
           Lwt.return res
           (* match (has_plugin,cpu_arch_check, cpu_freq_check, cpu_number_check, ram_size_check, disk_size_check, image_check)  with
           | (true, true, true, true, true, true, true) -> Lwt.return true
