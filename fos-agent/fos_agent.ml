@@ -157,11 +157,11 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   (* Starting Ping Server, listening on all interfaces, on port 9091  *)
   let _ = Heartbeat.run_server (Lwt_unix.ADDR_INET ((Unix.inet_addr_of_string "0.0.0.0"), 9091)) uuid in
 
-  (* let%lwt c_p = Utils.start_ping_single_threaded uuid yaks in
-  let%lwt c_h = Utils.heartbeat_task state in *)
+  let%lwt c_p = Utils.start_ping_single_threaded uuid yaks in
+  let%lwt c_h = Utils.heartbeat_task state in
 
-  let _,c_p = Lwt.wait () in
-  let _,c_h = Lwt.wait () in
+  (* let _,c_p = Lwt.wait () in
+  let _,c_h = Lwt.wait () in *)
 
   (* preparing ping information *)
   (* let%lwt _ = Utils.prepare_ping_tasks state in
