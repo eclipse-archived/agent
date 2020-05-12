@@ -674,7 +674,7 @@ open Utils
               | Some _ -> true
               | None -> false
              ) interfaces in
-            List.fold_left (fun i j -> i || j) true checks
+            List.fold_left (fun i j -> i && j) true checks
           in
           (*  *)
           Logs.debug (fun m -> m "[eval_check_fdu] - Plugin Check: %b" has_plugin );
@@ -686,7 +686,7 @@ open Utils
           Logs.debug (fun m -> m "[eval_check_fdu] - Image Check: %b" image_check);
           Logs.debug (fun m -> m "[eval_check_fdu] - Command Check: %b" image_check);
           Logs.debug (fun m -> m "[eval_check_fdu] - Interfaces Check: %b" interfaces_check);
-          let res = has_plugin || cpu_arch_check || cpu_freq_check || cpu_number_check || ram_size_check || disk_size_check || image_check || command_check || interfaces_check in
+          let res = has_plugin && cpu_arch_check && cpu_freq_check && cpu_number_check && ram_size_check && disk_size_check && image_check && command_check && interfaces_check in
           Lwt.return res
           (* match (has_plugin,cpu_arch_check, cpu_freq_check, cpu_number_check, ram_size_check, disk_size_check, image_check)  with
           | (true, true, true, true, true, true, true) -> Lwt.return true
