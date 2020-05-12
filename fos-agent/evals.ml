@@ -365,6 +365,70 @@ open Utils
     | exn ->
       let eval_res = FAgentTypes.{result = None ; error = Some 11; error_msg = Some (Printexc.to_string exn)} in
       Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
+  (* FDU schedule *)
+  let eval_schedule_fdu self (props:Apero.properties) =
+    Logs.debug (fun m -> m "[eval_schedule_fdu] - ##############");
+    Logs.debug (fun m -> m "[eval_schedule_fdu] - Properties: %s" (Apero.Properties.to_string props));
+
+    try%lwt
+      MVar.read self >>= fun state ->
+      let sysid =  (Apero.Option.get @@ state.configuration.agent.system) in
+      let tenantid =  Yaks_connector.default_tenant_id in
+      let fdu_uuid = Apero.Option.get @@ Apero.Properties.get "fdu_id" props in
+
+      let%lwt descriptor =
+        match%lwt Yaks_connector.Global.Actual.get_catalog_fdu_info sysid tenantid fdu_uuid state.yaks with
+        | Some d -> Lwt.return d
+        | None ->
+          Logs.err (fun m -> m "[eval_schedule_fdu] - FDU not found");
+          Lwt.fail @@ FException (`NotFound (`MsgCode (( Printf.sprintf ("FDU %s not found in catalog") fdu_uuid),404) ))
+       in
+      let%lwt res =  Yaks_connector.Global.Actual.call_multi_node_check sysid Yaks_connector.default_tenant_id descriptor state.yaks in
+      match res with
+      | [] ->
+        Logs.err (fun m -> m "[eval_schedule_fdu] - No node found for this FDU");
+        Lwt.fail @@ FException (`NotFound (`MsgCode ("No node found for this FDU",404) ))
+      | nodes ->
+          let%lwt lst = Lwt_list.filter_map_p (fun (e:FAgentTypes.eval_result) ->
+            match e.result with
+            | Some r ->
+              let r = (FAgentTypes.compatible_node_response_of_string (JSON.to_string r)) in
+              (match r.is_compatible with
+               | true ->
+                Logs.info (fun m -> m "[eval_schedule_fdu] - Node %s is compatible" r.uuid );
+                Lwt.return (Some r.uuid)
+               | false -> Lwt.return None)
+            | None -> Lwt.return None
+          ) nodes
+         in
+         match lst with
+         | [] ->
+          Lwt.fail @@ FException (`NotFound (`MsgCode ("No node found for this FDU",404) ))
+         | compatibles ->
+            let destination = List.nth compatibles (Random.int (List.length compatibles)) in
+            Logs.info (fun m -> m "[eval_schedule_fdu] - Node %s is random selected as destination for %s " destination descriptor.id);
+            let%lwt record = Fos_fim_api.FDU.define fdu_uuid destination state.fim_api in
+            let eval_res = FAgentTypes.{result = Some (JSON.of_string (Infra.Descriptors.FDU.string_of_record record)) ; error = None; error_msg = None} in
+            Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
+    with
+      | FException ex ->
+        Logs.err (fun m -> m "[eval_schedule_fdu] - EXCEPTION: %s" (Fos_errors.show_ferror ex));
+        (match ex with
+        | `NotFound ei ->
+          (match ei with
+          | `MsgCode (err,code) ->
+            let eval_res = FAgentTypes.{result = None ; error = Some code; error_msg = Some err} in
+            Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
+          | _  ->
+            let eval_res = FAgentTypes.{result = None ; error = Some 500; error_msg = Some (Fos_errors.show_ferror ex)} in
+            Lwt.return @@ FAgentTypes.string_of_eval_result eval_res)
+        | _ ->
+          let eval_res = FAgentTypes.{result = None ; error = Some 500; error_msg = Some (Fos_errors.show_ferror ex)} in
+          Lwt.return @@ FAgentTypes.string_of_eval_result eval_res)
+      | exn ->
+        Logs.err (fun m -> m "[eval_schedule_fdu] - EXCEPTION: %s" (Printexc.to_string exn));
+        let eval_res = FAgentTypes.{result = None ; error = Some 500; error_msg = Some (Printexc.to_string exn)} in
+        Lwt.return @@ FAgentTypes.string_of_eval_result eval_res
 
   (* FDU Onboard in Catalog -- this may be moved to FOrcE *)
   let eval_onboard_fdu self (props:Apero.properties) =
@@ -514,10 +578,18 @@ open Utils
 
   (* FDU Requirements Checks *)
   (* At Intitial implementation just checks cpu architecture, ram and if there is a plugin for the FDU
-   * More checks needed:
-   * CPU Count
-   * CPU Freq
-   * Disk space
+   * Checks:
+   * Plugin: done
+   * CPU Arch: done
+   * CPU Count : done
+   * CPU Freq : done
+   * RAM size: done
+   * Disk space : done
+   * Image in case the image file starts with file:// : done
+   * Command if starts with / : done
+   * Interfaces in case they are bridged or physical : done
+
+   (* Following requirements cannot be checked today because of lack of discovery from OS Plugins *)
    * GPUs
    * FPGAs
    * I/O Devices
@@ -539,32 +611,93 @@ open Utils
     try%lwt
       let descriptor = User.Descriptors.FDU.descriptor_of_string descriptor in
       let%lwt node_info = Yaks_connector.Global.Actual.get_node_info (Apero.Option.get @@ state.configuration.agent.system) Yaks_connector.default_tenant_id (Apero.Option.get state.configuration.agent.uuid) state.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
-      let comp_requirements = descriptor.computation_requirements in
-      let compare (fdu_cp:User.Descriptors.FDU.computational_requirements)  (ninfo:FTypes.node_info) =
-        let ncpu = List.hd ninfo.cpu in
-        let fdu_type = Fos_sdk.string_of_hv_type descriptor.hypervisor in
-        let%lwt plugins = Yaks_connector.Local.Actual.get_node_plugins (Apero.Option.get state.configuration.agent.uuid) state.yaks in
-        let%lwt matching_plugins = Lwt_list.filter_map_p (fun e ->
-            let%lwt pl = Yaks_connector.Local.Actual.get_node_plugin (Apero.Option.get state.configuration.agent.uuid) e state.yaks in
-            if String.uppercase_ascii (pl.name) = String.uppercase_ascii (fdu_type) then
-              Lwt.return (Some pl.uuid)
-            else
-              Lwt.return None
-          ) plugins
-        in
-        let has_plugin =
-          match matching_plugins with
-          | [] -> false
-          | _ -> true
-        in
-        Logs.debug (fun m -> m "[eval_check_fdu] - CPU Arch Check: %s = %s ? %b" fdu_cp.cpu_arch ncpu.arch ((String.compare fdu_cp.cpu_arch ncpu.arch) == 0));
-        Logs.debug (fun m -> m "[eval_check_fdu] - RAM Size Check: %b" (fdu_cp.ram_size_mb <= ninfo.ram.size));
-        Logs.debug (fun m -> m "[eval_check_fdu] - Plugin Check: %b" has_plugin );
-        match ((String.compare fdu_cp.cpu_arch ncpu.arch) == 0),(fdu_cp.ram_size_mb <= ninfo.ram.size), has_plugin with
-        | (true, true, true) -> Lwt.return true
-        | (_,_,_) -> Lwt.return false
+      let compare (fdu:User.Descriptors.FDU.descriptor)  (ninfo:FTypes.node_info) =
+        try%lwt
+          let fdu_cp = fdu.computation_requirements in
+          let fdu_net = fdu.interfaces in
+          let ncpu = List.hd ninfo.cpu in
+          let ndisk =  List.find_opt (fun (e:FTypes.disks_spec_type) -> (String.compare e.mount_point "/")==0 ) ninfo.disks |> Apero.Option.get in
+          let fdu_type = Fos_sdk.string_of_hv_type descriptor.hypervisor in
+          let%lwt plugins = Yaks_connector.Local.Actual.get_node_plugins (Apero.Option.get state.configuration.agent.uuid) state.yaks in
+          let%lwt matching_plugins = Lwt_list.filter_map_p (fun e ->
+              let%lwt pl = Yaks_connector.Local.Actual.get_node_plugin (Apero.Option.get state.configuration.agent.uuid) e state.yaks in
+              if String.uppercase_ascii (pl.name) = String.uppercase_ascii (fdu_type) then
+                Lwt.return (Some pl.uuid)
+              else
+                Lwt.return None
+            ) plugins
+          in
+          let has_plugin =
+            match matching_plugins with
+            | [] -> false
+            | _ -> true
+          in
+          let cpu_arch_check = ((String.compare fdu_cp.cpu_arch ncpu.arch) == 0) in
+          let cpu_number_check = (fdu_cp.cpu_min_count <= (List.length ninfo.cpu)) in
+          let cpu_freq_check = (fdu_cp.cpu_min_freq <= (Float.to_int ncpu.frequency)) in
+          let ram_size_check = (fdu_cp.ram_size_mb <= ninfo.ram.size) in
+          let disk_size_check = fdu_cp.storage_size_gb <= ndisk.dimension in
+          let image_check =
+            match descriptor.image with
+            | Some i ->
+              let file_re = Str.regexp "file://*" in
+              (match Str.string_match file_re i.uri 0 with
+              | false -> true
+              | true ->
+                let fname = String.sub i.uri 7 ((String.length i.uri)-7) in
+                Sys.file_exists fname
+              )
+            | None -> true
+          in
+          let command_check =
+            match descriptor.command with
+            | Some i ->
+              let file_re = Str.regexp "/*" in
+              (match Str.string_match file_re i.binary 0 with
+              | false -> true
+              | true ->
+                Sys.file_exists i.binary
+              )
+            | None -> true
+          in
+          let interfaces_check =
+            let ninterfaces = ninfo.network in
+            let interfaces = List.filter (fun (e:User.Descriptors.FDU.interface) ->
+                match e.virtual_interface.intf_type with
+                | `PHYSICAL  | `BRIDGED -> true
+                | _ ->  false
+              ) fdu_net
+            in
+            let checks = List.map (fun (e:User.Descriptors.FDU.interface) ->
+              let face_name = e.virtual_interface.vpci in
+              match List.find_opt (fun (ne:FTypes.network_spec_type) -> (String.compare ne.intf_name face_name)==0 ) ninterfaces with
+              | Some _ -> true
+              | None -> false
+             ) interfaces in
+            List.fold_left (fun i j -> i && j) true checks
+          in
+          let res = has_plugin && cpu_arch_check && cpu_freq_check && cpu_number_check && ram_size_check && disk_size_check && image_check && command_check && interfaces_check in
+          (*  *)
+          Logs.debug (fun m -> m "[eval_check_fdu] - Plugin Check: %b" has_plugin );
+          Logs.debug (fun m -> m "[eval_check_fdu] - CPU Arch Check: %s = %s ? %b" fdu_cp.cpu_arch ncpu.arch cpu_arch_check);
+          Logs.debug (fun m -> m "[eval_check_fdu] - CPU Number Check: %d <= %d ? %b" fdu_cp.cpu_min_count (List.length ninfo.cpu) cpu_number_check);
+          Logs.debug (fun m -> m "[eval_check_fdu] - CPU Freq Check: %d <= %d ? %b" fdu_cp.cpu_min_freq (Float.to_int ncpu.frequency) cpu_freq_check);
+          Logs.debug (fun m -> m "[eval_check_fdu] - RAM Size Check: %f <= %f ?  %b" fdu_cp.ram_size_mb ninfo.ram.size ram_size_check);
+          Logs.debug (fun m -> m "[eval_check_fdu] - Disk Size Check: %f <= %f ?  %b" fdu_cp.storage_size_gb ndisk.dimension disk_size_check);
+          Logs.debug (fun m -> m "[eval_check_fdu] - Image Check: %b" image_check);
+          Logs.debug (fun m -> m "[eval_check_fdu] - Command Check: %b" image_check);
+          Logs.debug (fun m -> m "[eval_check_fdu] - Interfaces Check: %b" interfaces_check);
+          Logs.debug (fun m -> m "[eval_check_fdu] - Is compatible? %b" res);
+          Lwt.return res
+          (* match (has_plugin,cpu_arch_check, cpu_freq_check, cpu_number_check, ram_size_check, disk_size_check, image_check)  with
+          | (true, true, true, true, true, true, true) -> Lwt.return true
+          | (_,_,_,_,_,_,_) -> Lwt.return false *)
+        with
+          | exn ->
+            Logs.err (fun m -> m "[eval_check_fdu] - Exception: %s" (Printexc.to_string exn));
+            Lwt.return false
       in
-      let%lwt res = compare comp_requirements node_info in
+      let%lwt res = compare descriptor node_info in
       let res = match res with
         | true -> FAgentTypes.{uuid = (Apero.Option.get state.configuration.agent.uuid); is_compatible=true }
         | false ->  FAgentTypes.{uuid = (Apero.Option.get state.configuration.agent.uuid); is_compatible=false }

@@ -124,7 +124,9 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   (* FDU Evals *)
   let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "onboard_fdu" (Evals.eval_onboard_fdu state) yaks in
   let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "define_fdu" (Evals.eval_define_fdu state) yaks in
-  let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "check_node_compatibilty" (Evals.eval_check_fdu state) yaks in
+  (* Scheduler Evals *)
+  let%lwt _ = Yaks_connector.Global.Actual.add_fdu_check_eval sys_id Yaks_connector.default_tenant_id uuid (Evals.eval_check_fdu state) yaks in
+  let%lwt _ = Yaks_connector.Global.Actual.add_fdu_schedule_eval sys_id Yaks_connector.default_tenant_id uuid (Evals.eval_schedule_fdu state) yaks in
   (* Heartbeat eval *)
   let%lwt _ = Yaks_connector.Global.Actual.add_agent_eval sys_id Yaks_connector.default_tenant_id uuid "heartbeat" (Evals.eval_heartbeat uuid state) yaks in
   (* Constraint Eval  *)
@@ -157,6 +159,9 @@ let agent verbose_flag debug_flag configuration custom_uuid =
 
   let%lwt c_p = Utils.start_ping_single_threaded uuid yaks in
   let%lwt c_h = Utils.heartbeat_task state in
+
+  (* let _,c_p = Lwt.wait () in
+  let _,c_h = Lwt.wait () in *)
 
   (* preparing ping information *)
   (* let%lwt _ = Utils.prepare_ping_tasks state in
