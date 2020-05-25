@@ -239,6 +239,7 @@ let heartbeat_single_threaded (state : ping_status) =
 
 let run_server addr nodeid =
     let server_sock = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
+    let _ = Lwt_unix.setsockopt server_sock Lwt_unix.SO_REUSEADDR true in
     Logs.debug (fun m -> m "[run_server] Eclipse fog05 Ping Server -- %s\n" nodeid);
     let%lwt _ = Lwt_unix.bind server_sock addr in
     let blen = 1024 in
