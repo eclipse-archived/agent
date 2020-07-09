@@ -145,14 +145,32 @@ open Utils
 
   (*  *)
   let cb_gd_net_all self (net:FTypes.virtual_network option) (is_remove:bool) (uuid:string option) =
-    let%lwt net_p = get_network_plugin self in
+    let%lwt net_p = get_network_plugin_info self in
+    (* let face =
+      match net_p.configuration with
+      | Some c ->
+        Yojson.Safe.to_string @@ Yojson.Safe.Util.member "dataplane_interface" c
+      | None ->
+          Logs.debug (fun m -> m "[cb_gd_net_all] - Missing data plane interface configuration");
+          ""
+    in *)
     match is_remove with
     | false ->
       (match net with
        | Some net ->
          MVar.read self >>= fun self ->
          Logs.debug (fun m -> m "[cb_gd_net_all] - ##############");
-         Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Updated! Agent will update actual store and call the right plugin!");
+         Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Updated! Agent will update actual store");
+         Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Info: %s" (FTypes.string_of_virtual_network net));
+         let vni = (Random.int 16777215) in
+         let net = match net.vni with | Some _ -> net | None -> {net with vni = Some vni } in
+         let net = match net.mcast_addr with | Some _ -> net | None -> {net with mcast_addr = Some (Printf.sprintf "239.0.%d.%d" (Random.int 255) (Random.int 255))} in
+         let net = match net.port with | Some _ -> net | None -> {net with port = Some 4789} in
+         let net = match net.overlay with | Some _ -> net | None -> {net with overlay = Some true} in
+         let net = match net.vlan_id with | Some _ -> net | None -> {net with vlan_id = Some (Random.int 4095) } in
+         Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Info Updated: %s" (FTypes.string_of_virtual_network net));
+         (* let net = match net.face with | Some _ -> net | None -> {net with face = Some face } in *)
+         (* let net = match net.br_name with | Some _ -> net | None -> {net with br_name = Some (Printf.sprintf "fos-br-%d" vni)} in *)
          let%lwt _ = Yaks_connector.Global.Actual.add_network (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id net.uuid net self.yaks in
          (* let record = FTypesRecord.{uuid = net.uuid; status = `CREATE; properties = None; ip_configuration = net.ip_configuration; overlay = None; vni = None; mcast_addr = None; vlan_id = None; face = None} in *)
          (* Yaks_connector.Local.Desired.add_node_network (Apero.Option.get self.configuration.agent.uuid) net_p net.uuid record self.yaks *)
@@ -163,9 +181,9 @@ open Utils
        | Some netid -> MVar.read self >>= fun self ->
          Logs.debug (fun m -> m "[cb_gd_net_all] - ##############");
          Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Removed!");
-         let%lwt net_info = Yaks_connector.Local.Actual.get_node_network (Apero.Option.get self.configuration.agent.uuid) net_p netid self.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
+         let%lwt net_info = Yaks_connector.Local.Actual.get_node_network (Apero.Option.get self.configuration.agent.uuid) net_p.uuid netid self.yaks >>= fun x -> Lwt.return @@ Apero.Option.get x in
          let net_info = {net_info with status = `DESTROY} in
-         let%lwt _ = Yaks_connector.Local.Desired.add_node_network (Apero.Option.get self.configuration.agent.uuid) net_p netid net_info self.yaks in
+         let%lwt _ = Yaks_connector.Local.Desired.add_node_network (Apero.Option.get self.configuration.agent.uuid) net_p.uuid netid net_info self.yaks in
          Yaks_connector.Global.Actual.remove_network (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id netid self.yaks >>= Lwt.return
        | None ->
          Logs.debug (fun m -> m "[cb_gd_net_all] - vNET NO UUID!!!!");
