@@ -47,7 +47,7 @@ let main_loop state promise ping_completer heartbeat_completer =
 
 
 
-let agent verbose_flag debug_flag configuration custom_uuid =
+let agent verbose_flag debug_flag configuration custom_uuid hb_flag =
   Random.self_init();
   let level, reporter = (match verbose_flag with
       | true -> Apero.Result.get @@ Logs.level_of_string "debug" ,  (Logs_fmt.reporter ())
@@ -71,6 +71,7 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   let sys_id = Apero.Option.get @@ conf.agent.system in
   let uuid = (Apero.Option.get conf.agent.uuid) in
   Logs.debug (fun m -> m "[agent] - INIT - DEBUG IS: %b"  debug_flag);
+  Logs.debug (fun m -> m "[agent] - INIT - Heartbeat IS: %b"  hb_flag);
   Logs.debug (fun m -> m "[agent] - INIT - ##############");
   Logs.debug (fun m -> m "[agent] - INIT - Agent Configuration is:");
   Logs.debug (fun m -> m "[agent] - INIT - SYSID: %s" sys_id);
@@ -163,30 +164,24 @@ let agent verbose_flag debug_flag configuration custom_uuid =
   (* Starting Ping Server, listening on all interfaces, on port 9091  *)
   let _ = Heartbeat.run_server (Lwt_unix.ADDR_INET ((Unix.inet_addr_of_string "0.0.0.0"), 9091)) uuid in
 
-  let%lwt c_p = Utils.start_ping_single_threaded uuid yaks in
-  let%lwt c_h = Utils.heartbeat_task state in
+  let%lwt c_p, c_h = match hb_flag with
+    | true ->
 
-  (* let _,c_p = Lwt.wait () in
-  let _,c_h = Lwt.wait () in *)
+      let%lwt c_p = Utils.start_ping_single_threaded uuid yaks in
+      let%lwt c_h = Utils.heartbeat_task state in
+      Lwt.return (c_p,c_h)
+    | false ->
+      let _,c_p = Lwt.wait () in
+      let _,c_h = Lwt.wait () in
+      Lwt.return (c_p,c_h)
+  in
 
-  (* preparing ping information *)
-  (* let%lwt _ = Utils.prepare_ping_tasks state in
-  let%lwt _ = MVar.read state >>= fun self ->
-    let pings = Heartbeat.HeartbeatMap.bindings self.ping_tasks in
-    Lwt_list.iter_p (fun (nid,tasks) ->
-      let ping_task_starter = Utils.start_ping_task (Apero.Option.get self.configuration.agent.uuid) self.yaks nid in
-      Lwt_list.iter_p ( fun task ->
-      let%lwt ip = MVar.read task >>= fun (t : Heartbeat.statistics) -> Lwt.return t.peer_address in
-      ping_task_starter ip task
-      ) tasks
-    ) pings
-  in *)
   main_loop state prom c_p c_h
 
 (* AGENT CMD  *)
 
-let start verbose_flag debug_flag configuration_path custom_uuid =
-  Lwt_main.run @@ agent verbose_flag debug_flag configuration_path custom_uuid
+let start verbose_flag debug_flag configuration_path custom_uuid hb_flag =
+  Lwt_main.run @@ agent verbose_flag debug_flag configuration_path custom_uuid hb_flag
 
 let verbose =
   let doc = "Set verbose output." in
@@ -200,12 +195,16 @@ let debug =
   let doc = "Set debug (not load spawner)" in
   Cmdliner.Arg.(value & flag & info ["b";"debug"] ~doc)
 
+let hb =
+  let doc = "Disable heartbeat" in
+  Cmdliner.Arg.(value & flag & info ["h";"heartbeat"] ~doc)
+
 let config =
   let doc = "Configuration file path" in
   Cmdliner.Arg.(value & opt string "/etc/fos/agent.json" & info ["c";"conf"] ~doc)
 
 
-let agent_t = Cmdliner.Term.(const start $ verbose $ debug $ config $ id)
+let agent_t = Cmdliner.Term.(const start $ verbose $ debug $ config $ id $ hb)
 
 let info =
   let doc = "fog05 | The Fog-Computing IaaS" in
