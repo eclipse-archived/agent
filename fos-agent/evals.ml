@@ -697,7 +697,9 @@ open Utils
               (match Str.string_match file_re i.binary 0 with
               | false -> true
               | true ->
-                Sys.file_exists i.binary
+                (match descriptor.hypervisor with
+                | `ROS2 -> true
+                | _ ->  Sys.file_exists i.binary)
               )
             | None -> true
           in
@@ -726,7 +728,7 @@ open Utils
           Logs.debug (fun m -> m "[eval_check_fdu] - RAM Size Check: %f <= %f ?  %b" fdu_cp.ram_size_mb ninfo.ram.size ram_size_check);
           Logs.debug (fun m -> m "[eval_check_fdu] - Disk Size Check: %f <= %f ?  %b" fdu_cp.storage_size_gb ndisk.dimension disk_size_check);
           Logs.debug (fun m -> m "[eval_check_fdu] - Image Check: %b" image_check);
-          Logs.debug (fun m -> m "[eval_check_fdu] - Command Check: %b" image_check);
+          Logs.debug (fun m -> m "[eval_check_fdu] - Command Check: %b" command_check);
           Logs.debug (fun m -> m "[eval_check_fdu] - Interfaces Check: %b" interfaces_check);
           Logs.debug (fun m -> m "[eval_check_fdu] - Is compatible? %b" res);
           Lwt.return res
