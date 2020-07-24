@@ -159,22 +159,32 @@ open Utils
       (match net with
        | Some net ->
          MVar.read self >>= fun self ->
+
          Logs.debug (fun m -> m "[cb_gd_net_all] - ##############");
          Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Updated! Agent will update actual store");
          Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Info: %s" (FTypes.string_of_virtual_network net));
-         let vni = (Random.int 16777215) in
-         let net = match net.vni with | Some _ -> net | None -> {net with vni = Some vni } in
-         let net = match net.mcast_addr with | Some _ -> net | None -> {net with mcast_addr = Some (Printf.sprintf "239.0.%d.%d" (Random.int 255) (Random.int 255))} in
-         let net = match net.port with | Some _ -> net | None -> {net with port = Some 4789} in
-         let net = match net.overlay with | Some _ -> net | None -> {net with overlay = Some true} in
-         let net = match net.vlan_id with | Some _ -> net | None -> {net with vlan_id = Some (Random.int 4095) } in
-         Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Info Updated: %s" (FTypes.string_of_virtual_network net));
+         let%lwt nd = Yaks_connector.Global.Actual.get_network (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id net.uuid self.yaks in
+         let net_exists =
+          (match nd with
+          | Some _ -> true
+          | None -> false)
+          in
          (* let net = match net.face with | Some _ -> net | None -> {net with face = Some face } in *)
          (* let net = match net.br_name with | Some _ -> net | None -> {net with br_name = Some (Printf.sprintf "fos-br-%d" vni)} in *)
-         let%lwt _ = Yaks_connector.Global.Actual.add_network (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id net.uuid net self.yaks in
-         (* let record = FTypesRecord.{uuid = net.uuid; status = `CREATE; properties = None; ip_configuration = net.ip_configuration; overlay = None; vni = None; mcast_addr = None; vlan_id = None; face = None} in *)
-         (* Yaks_connector.Local.Desired.add_node_network (Apero.Option.get self.configuration.agent.uuid) net_p net.uuid record self.yaks *)
-         Lwt.return_unit
+         (match net_exists with
+         | true ->
+          Logs.debug (fun m -> m "[cb_gd_net_all] - vNET already existing: %s"  net.uuid);
+          Lwt.return_unit
+         | false ->
+          let vni = (Random.int 16777215) in
+          let net = match net.vni with | Some _ -> net | None -> {net with vni = Some vni } in
+          let net = match net.mcast_addr with | Some _ -> net | None -> {net with mcast_addr = Some (Printf.sprintf "239.0.%d.%d" (Random.int 255) (Random.int 255))} in
+          let net = match net.port with | Some _ -> net | None -> {net with port = Some 4789} in
+          let net = match net.overlay with | Some _ -> net | None -> {net with overlay = Some true} in
+          let net = match net.vlan_id with | Some _ -> net | None -> {net with vlan_id = Some (Random.int 4095) } in
+          Logs.debug (fun m -> m "[cb_gd_net_all] - vNET Info Updated: %s" (FTypes.string_of_virtual_network net));
+          let%lwt _ = Yaks_connector.Global.Actual.add_network (Apero.Option.get @@ self.configuration.agent.system) Yaks_connector.default_tenant_id net.uuid net self.yaks in
+          Lwt.return_unit)
        | None -> Lwt.return_unit)
     | true ->
       (match uuid with
