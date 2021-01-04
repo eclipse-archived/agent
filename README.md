@@ -8,6 +8,8 @@
 
 # Eclipse fog05 Agent
 
+THIS REPO HAS BEEN ARCHIVED.
+
 This repo contains the Eclipse fog05 Agent.
 
 Agent is used for close-loop management of a node, exposing node resources to the rest of the system and as proxy for resource-constrained nodes.
